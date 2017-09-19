@@ -121,7 +121,12 @@ static uint8_t heart_rate_service_uuid2[2] = {
       0x18, 0x0D,
 
 };
+static uint8_t test_char_uuid2[2] = {
+    //first uuid, 16bit, [12],[13] is the value
+ //   0xfb, 0x34, 0x9b, 0x5f, 0x80, 0x00, 0x00, 0x80, 0x00, 0x10, 0x00, 0x00, 0x18, 0x0D, 0x00, 0x00,
+      0x39, 0x2a,
 
+};
 
 
 static esp_ble_adv_data_t heart_rate_adv_config = {
@@ -230,10 +235,12 @@ static const esp_gatts_attr_db_t heart_rate_gatt_db[HRS_IDX_NB] =
 
     // Heart Rate Control Point Characteristic Value
     [HRS_IDX_HR_CTNL_PT_VAL]             =
-    {{ESP_GATT_AUTO_RSP}, {ESP_UUID_LEN_16, (uint8_t *)&heart_rate_ctrl_point, ESP_GATT_PERM_WRITE|ESP_GATT_PERM_READ,
-      sizeof(uint8_t), sizeof(heart_ctrl_point), (uint8_t *)heart_ctrl_point}},
-};
+    //{{ESP_GATT_AUTO_RSP}, {ESP_UUID_LEN_16, (uint8_t *)&heart_rate_ctrl_point, ESP_GATT_PERM_WRITE|ESP_GATT_PERM_READ,
+    //  sizeof(uint8_t), sizeof(heart_ctrl_point), (uint8_t *)heart_ctrl_point}},
+    {{ESP_GATT_AUTO_RSP}, {sizeof(test_char_uuid2), (uint8_t *)&test_char_uuid2, ESP_GATT_PERM_WRITE|ESP_GATT_PERM_READ,
+     sizeof(uint8_t), sizeof(heart_ctrl_point), (uint8_t *)heart_ctrl_point}},
 
+};
 
 
 
@@ -487,7 +494,7 @@ static void gatts_profile_a_event_handler(esp_gatts_cb_event_t event,
         ESP_LOGI(GATTS_TAG,
                 "GATT_READ_EVT, conn_id %d, trans_id %d, handle %d\n",
                 param->read.conn_id, param->read.trans_id, param->read.handle);
-        /*esp_gatt_rsp_t rsp;
+        esp_gatt_rsp_t rsp;
         memset(&rsp, 0, sizeof(esp_gatt_rsp_t));
         rsp.attr_value.handle = param->read.handle;
         rsp.attr_value.len = 4;
@@ -497,7 +504,7 @@ static void gatts_profile_a_event_handler(esp_gatts_cb_event_t event,
         rsp.attr_value.value[3] = 0xef;
         esp_ble_gatts_send_response(gatts_if, param->read.conn_id,
                 param->read.trans_id, ESP_GATT_OK, &rsp);
-        */
+
         break;
     }
     case ESP_GATTS_WRITE_EVT: {
@@ -614,7 +621,7 @@ static void gatts_profile_a_event_handler(esp_gatts_cb_event_t event,
 
         //add indicator
         gatts_if_for_indicate = gatts_if;
-        printf("set %d for gatts_if_for_indicate\n", gatts_if);
+        //printf("set %d for gatts_if_for_indicate\n", gatts_if);
         break;
     }
     case ESP_GATTS_DISCONNECT_EVT:

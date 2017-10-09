@@ -37,7 +37,8 @@
 #include <string.h>
 #include "esp_system.h"
 #include "driver/gpio.h"
-#include "esp_heap_alloc_caps.h"
+//#include "esp_heap_alloc_caps.h"
+#include "esp_heap_caps.h"
 #include "tftspi.h"
 #include "tft.h"
 //#include "spiffs_vfs.h"
@@ -242,7 +243,8 @@ esp_gatt_if_t gatts_if_for_indicate = ESP_GATT_IF_NONE;
 //TFT definition
 // ==================================================
 // Define which spi bus to use VSPI_HOST or HSPI_HOST
-#define SPI_BUS VSPI_HOST
+//#define SPI_BUS VSPI_HOST
+#define SPI_BUS HSPI_HOST
 // ==================================================
 
 static int _demo_pass = 0;
@@ -551,16 +553,24 @@ static color_t random_color() {
 
 
 //---------------------
+//---------------------
 static void _dispTime()
 {
+    Font curr_font = cfont;
+    if (_width < 240) TFT_setFont(DEF_SMALL_FONT, NULL);
+    else TFT_setFont(DEFAULT_FONT, NULL);
+
     time(&time_now);
     time_last = time_now;
     tm_info = localtime(&time_now);
     sprintf(tmp_buff, "%02d:%02d:%02d", tm_info->tm_hour, tm_info->tm_min, tm_info->tm_sec);
     TFT_print(tmp_buff, CENTER, _height-TFT_getfontheight()-5);
+
+    cfont = curr_font;
 }
 
 
+//---------------------------------
 //---------------------------------
 static void disp_header(char *info)
 {
@@ -570,7 +580,8 @@ static void disp_header(char *info)
     _fg = TFT_YELLOW;
     _bg = (color_t){ 64, 64, 64 };
 
-    TFT_setFont(DEFAULT_FONT, NULL);
+    if (_width < 240) TFT_setFont(DEF_SMALL_FONT, NULL);
+    else TFT_setFont(DEFAULT_FONT, NULL);
     TFT_fillRect(0, 0, _width-1, TFT_getfontheight()+8, _bg);
     TFT_drawRect(0, 0, _width-1, TFT_getfontheight()+8, TFT_CYAN);
 
@@ -583,6 +594,7 @@ static void disp_header(char *info)
     _bg = TFT_BLACK;
     TFT_setclipwin(0,TFT_getfontheight()+9, _width-1, _height-TFT_getfontheight()-10);
 }
+
 
 //---------------------------------------------
 static void update_header(char *hdr, char *ftr)
@@ -597,7 +609,8 @@ static void update_header(char *hdr, char *ftr)
     last_fg = _fg;
     _fg = TFT_YELLOW;
     _bg = (color_t){ 64, 64, 64 };
-    TFT_setFont(DEFAULT_FONT, NULL);
+    if (_width < 240) TFT_setFont(DEF_SMALL_FONT, NULL);
+    else TFT_setFont(DEFAULT_FONT, NULL);
 
     if (hdr) {
         TFT_fillRect(1, 1, _width-3, TFT_getfontheight()+6, _bg);
@@ -616,8 +629,6 @@ static void update_header(char *hdr, char *ftr)
 
     TFT_restoreClipWin();
 }
-
-
 
 static void arc_demo()
 {
@@ -656,7 +667,7 @@ static void arc_demo()
 
     update_header("OUTLINED ARC", "");
     */
-    //TFT_fillWindow(TFT_BLACK);
+    TFT_fillWindow(TFT_BLACK);
     th = 8;
     end_time = clock() + 0;
     i = 0;
@@ -698,6 +709,7 @@ void tft_demo_init() {
     gray_scale = 0;
     doprint = 1;
 
+    disp_rot = 0;
     TFT_setRotation(disp_rot);
     disp_header("ESP32 TFT DEMO");
     TFT_setFont(COMIC24_FONT, NULL);
@@ -713,7 +725,7 @@ void tft_demo_init() {
     sprintf(tmp_buff, "Read speed: %5.2f MHz", (float)max_rdclock/1000000.0);
     TFT_print(tmp_buff, CENTER, LASTY+tempy);
 
-    //Wait(4000);
+    Wait(4000);
 
     //while (1) {
         if (run_gs_demo) {
@@ -794,6 +806,8 @@ void init_tft(){
     max_rdclock = 8000000;
     // ===================================================
 
+
+    TFT_PinsInit();
 
     // ====  CONFIGURE SPI DEVICES(s)  ====================================================================================
 

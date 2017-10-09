@@ -16,7 +16,7 @@
 #include "time.h"
 #include <math.h>
 #include "rom/tjpgd.h"
-#include "esp_heap_alloc_caps.h"
+#include "esp_heap_caps.h"
 #include "tftspi.h"
 
 
@@ -41,7 +41,7 @@ extern uint8_t tft_Ubuntu16[];
 extern uint8_t tft_Comic24[];
 extern uint8_t tft_minya24[];
 extern uint8_t tft_tooney32[];
-
+extern uint8_t tft_def_small[];
 
 // ==== Color definitions constants ==============
 const color_t TFT_BLACK       = {   0,   0,   0 };
@@ -230,7 +230,7 @@ static void _drawLine(int16_t x0, int16_t y0, int16_t x1, int16_t y1, color_t co
     swap(y0, y1);
   }
 
-  int16_t dx = x1 - x0, dy = abs(y1 - y0);;
+  int16_t dx = x1 - x0, dy = abs(y1 - y0);
   int16_t err = dx >> 1, ystep = -1, xs = x0, dlen = 0;
 
   if (y0 < y1) ystep = 1;
@@ -1128,7 +1128,7 @@ static int load_file_font(const char * fontfile, int info)
 
 	if (info) {
 		if (width != 0) {
-			printf("Fixed width font:\r\n  size: %d  width: %d  height: %d  characters: %d (%d~%d)",
+			printf("Fixed width font:\r\n  size: %d  width: %d  height: %d  characters: %d (%d~%d)\n",
 					size, width, height, numchar, first, last);
 		}
 		else {
@@ -1281,14 +1281,18 @@ int compile_font_file(char *fontfile, uint8_t dbg)
 	sprintf(outfile, "RPH_font");
     if (fwrite(outfile, 1, 8, ffd_out) != 8) goto error;
 
+    fclose(ffd_out);
+    ffd_out = NULL;
+
 	// === Test compiled font ===
 	sprintf(outfile, "%s", fontfile);
 	sprintf(outfile+strlen(outfile)-1, "fon");
 
 	uint8_t *uf = userfont; // save userfont pointer
 	userfont = NULL;
-	if (load_file_font(outfile, 1) == 0) {
+	if (load_file_font(outfile, 1) != 0) {
 		sprintf(err_msg, "Error compiling file!");
+		err = 10;
 	}
 	else {
 		free(userfont);
@@ -1503,6 +1507,7 @@ void TFT_setFont(uint8_t font, const char *font_file)
 	  else if (font == MINYA24_FONT) cfont.font = tft_minya24;
 	  else if (font == TOONEY32_FONT) cfont.font = tft_tooney32;
 	  else if (font == SMALL_FONT) cfont.font = tft_SmallFont;
+	  else if (font == DEF_SMALL_FONT) cfont.font = tft_def_small;
 	  else cfont.font = tft_DefaultFont;
 
 	  cfont.bitmap = 1;
@@ -1551,7 +1556,7 @@ static int printProportionalChar(int x, int y) {
 
 		// === buffer Glyph data for faster sending ===
 		len = char_width * cfont.y_size;
-		color_t *color_line = pvPortMallocCaps(len*3, MALLOC_CAP_DMA);
+		color_t *color_line = heap_caps_malloc(len*3, MALLOC_CAP_DMA);
 		if (color_line) {
 			// fill with background color
 			for (int n = 0; n < len; n++) {
@@ -1637,7 +1642,7 @@ static void printChar(uint8_t c, int x, int y) {
 	if ((font_buffered_char) && (!font_transparent)) {
 		// === buffer Glyph data for faster sending ===
 		len = cfont.x_size * cfont.y_size;
-		color_t *color_line = pvPortMallocCaps(len*3, MALLOC_CAP_DMA);
+		color_t *color_line = heap_caps_malloc(len*3, MALLOC_CAP_DMA);
 		if (color_line) {
 			// fill with background color
 			for (int n = 0; n < len; n++) {
@@ -2381,9 +2386,9 @@ void TFT_jpg_image(int x, int y, uint8_t scale, char *fname, uint8_t *buf, int s
 	dev.linbuf[1] = NULL;
     dev.linbuf_idx = 0;
 
+   	dev.fhndl = NULL;
     if (fname == NULL) {
     	// image from buffer
-    	dev.fhndl = NULL;
         dev.membuff = buf;
         dev.bufsize = size;
         dev.bufptr = 0;
@@ -2427,12 +2432,12 @@ void TFT_jpg_image(int x, int y, uint8_t scale, char *fname, uint8_t *buf, int s
 			dev.x = x;
 			dev.y = y;
 
-			dev.linbuf[0] = pvPortMallocCaps(JPG_IMAGE_LINE_BUF_SIZE*3, MALLOC_CAP_DMA);;
+			dev.linbuf[0] = heap_caps_malloc(JPG_IMAGE_LINE_BUF_SIZE*3, MALLOC_CAP_DMA);
 			if (dev.linbuf[0] == NULL) {
 				if (image_debug) printf("Error allocating line buffer\r\n");
 				goto exit;
 			}
-			dev.linbuf[1] = pvPortMallocCaps(JPG_IMAGE_LINE_BUF_SIZE*3, MALLOC_CAP_DMA);;
+			dev.linbuf[1] = heap_caps_malloc(JPG_IMAGE_LINE_BUF_SIZE*3, MALLOC_CAP_DMA);
 			if (dev.linbuf[0] == NULL) {
 				if (image_debug) printf("Error allocating line buffer\r\n");
 				goto exit;
@@ -2595,14 +2600,14 @@ int TFT_bmp_image(int x, int y, uint8_t scale, char *fname, uint8_t *imgbuf, int
 	}
 
 	// ** Allocate memory for 2 lines of image pixels
-	line_buf[0] = pvPortMallocCaps(img_xsize*3, MALLOC_CAP_DMA);
+	line_buf[0] = heap_caps_malloc(img_xsize*3, MALLOC_CAP_DMA);
 	if (line_buf[0] == NULL) {
 	    sprintf(err_buf, "allocating line buffer #1");
 		err=-12;
 		goto exit;
 	}
 
-	line_buf[1] = pvPortMallocCaps(img_xsize*3, MALLOC_CAP_DMA);
+	line_buf[1] = heap_caps_malloc(img_xsize*3, MALLOC_CAP_DMA);
 	if (line_buf[1] == NULL) {
 	    sprintf(err_buf, "allocating line buffer #2");
 		err=-13;

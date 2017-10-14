@@ -49,6 +49,10 @@
 //compass
 #include "MPU9250_asukiaaa.h"
 
+//application
+#include <math.h>
+
+
 #define GATTS_TABLE_TAG "GATTS_TABLE_DEMO"
 
 #define HEART_PROFILE_NUM 			    1
@@ -284,8 +288,17 @@ mpu9250_t mpu9250_data = {
 };
 // ==================================================
 
-
-
+//application definition
+//radar init
+#define RADAR_MAX_DIST 1000 //レーダーで表示する中心からの最大距離
+int gDispWidth = 0;
+double gAngle=0;    //北を起点としてCW方向を正とする
+double gScale=0;
+color_t gBaseColor1 = {.r = 102, .g=255, .b = 102};
+//gBaseColor1.r = 102;
+//gBaseColor1.g = 255;
+//gBaseColor1.b = 102;
+double gDispRadius=0;
 
 static void gap_event_handler(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param_t *param)
 {
@@ -726,7 +739,7 @@ void tft_demo_init() {
     TFT_print(tmp_buff, CENTER, LASTY+tempy);
 
     Wait(4000);
-
+    gDispWidth = (dispWin.x2-dispWin.x1)/2;
     //while (1) {
         if (run_gs_demo) {
             if (_demo_pass == 8) doprint = 0;
@@ -880,6 +893,13 @@ void init_tft(){
     TFT_setFont(DEFAULT_FONT, NULL);
     TFT_resetclipwin();
 
+    //application initialization
+    disp_header("ESP32 TFT DEMO");
+    uint16_t x, y;
+    x = (dispWin.x2 - dispWin.x1) / 2;
+    y = (dispWin.y2 - dispWin.y1) / 2;
+    if( x < y ) gDispRadius = x;
+    else gDispRadius = y;
 }
 
 //encoder defitnitions
@@ -957,6 +977,58 @@ void init_encoder(){
 }
 //end of encoder
 
+//pre_x, pre_y 実世界の座標。
+// apos_x, apos_y 変換後の画像座標系での位置
+void calcUIPos(double pre_x, double pre_y, double angle, double scale, double * pos_x, double * pos_y){
+
+    //まずは、中心からの距離と角度を算出する。
+    double dist = sqrt(pre_x*pre_x+pre_y*pre_y);
+    double angle1 = atan2(pre_y, pre_x)*180.0/PI;
+    double angle2 = angle1-angle; //方位磁針の角度を反映する
+
+    double rate = gDispWidth/2.0/(log10(RADAR_MAX_DIST*scale));
+    double dist2 = log10(dist)*rate;
+    *pos_x = dist2*cos(angle2*PI/180.0);
+    *pos_y = dist2*sin(angle2*PI/180.0);
+}
+
+
+void drawBase(){
+    uint16_t x, y, th, n, i;
+
+    //draw out line
+    x = (dispWin.x2 - dispWin.x1) / 2;
+    y = (dispWin.y2 - dispWin.y1) / 2;
+    int start = 0;
+    int end = 359.9;
+    th = 6;
+    for(int i=0; i<6; i++){
+        TFT_drawCircle(x, y, gDispRadius-i, gBaseColor1);
+    }
+    //TFT_fillCircle(x, y, gDispRadius-6, TFT_BLACK);
+    //TFT_drawArc(x, y, 50, th, start, end, gBaseColor1, gBaseColor1);
+    //TFT_drawArc(x, y, gDispRadius, th, start, end, gBaseColor1, gBaseColor1);
+    //printf("x=%d, y=%d, radius=%f\n", x, y, gDispRadius);
+    return;
+
+    //drow axis
+    //x axis
+    double posx1, posy1, posx2, posy2;
+    calcUIPos(RADAR_MAX_DIST, 0, gAngle, 1, &posx1, &posy1);
+    calcUIPos(-1.0*RADAR_MAX_DIST, 0, gAngle, 1, &posx2, &posy2);
+    TFT_drawLine(posx1,posy1,posx2,posy2,gBaseColor1);
+
+    //y axis
+    calcUIPos(0, RADAR_MAX_DIST, gAngle, 1, &posx1, &posy1);
+    calcUIPos(0, RADAR_MAX_DIST, gAngle, 1, &posx2, &posy2);
+    TFT_drawLine(posx1,posy1,posx2,posy2,gBaseColor1);
+
+    //arrow
+    TFT_drawPolygon(0, 0, 3, 10, gBaseColor1, gBaseColor1, gAngle, 3);
+
+}
+
+
 
 void app_main()
 {
@@ -1001,7 +1073,6 @@ void app_main()
 
     //init tft
     init_tft();
-    tft_demo_init();
 
     //init encoder
     init_encoder();
@@ -1011,36 +1082,37 @@ void app_main()
 
 
     int cnt = 0;
-       while (1) {
-           printf("cnt: %d\n", cnt++);
-           //vTaskDelay(5000 / portTICK_RATE_MS);
-            ble_indicate(cnt);
+    while (1) {
+#if 0
+        printf("cnt: %d\n", cnt++);
+        //vTaskDelay(5000 / portTICK_RATE_MS);
+        ble_indicate(cnt);
 
-           uint16_t length = 0;
-                       const uint8_t *prf_char;
-                  // esp_ble_gatts_get_attr_value(42, 6, (uint8_t*)value);
-                   esp_ble_gatts_get_attr_value(42,  &length, &prf_char);
-                   esp_ble_gatts_set_attr_value(45,  length, prf_char);
+        uint16_t length = 0;
+        const uint8_t *prf_char;
+        // esp_ble_gatts_get_attr_value(42, 6, (uint8_t*)value);
+        esp_ble_gatts_get_attr_value(42,  &length, &prf_char);
+        esp_ble_gatts_set_attr_value(45,  length, prf_char);
 
-                       ESP_LOGI(GATTS_TABLE_TAG, "the gatts demo char length = %x\n", length);
-                       for(int i = 0; i < length; i++){
-                           ESP_LOGI(GATTS_TABLE_TAG, "prf_char[%x] =%x",i,prf_char[i]);
-                       }
-                       ESP_LOGI(GATTS_TABLE_TAG, "\n");
+        ESP_LOGI(GATTS_TABLE_TAG, "the gatts demo char length = %x\n", length);
+        for(int i = 0; i < length; i++){
+            ESP_LOGI(GATTS_TABLE_TAG, "prf_char[%x] =%x",i,prf_char[i]);
+        }
+        ESP_LOGI(GATTS_TABLE_TAG, "\n");
 
-                       mpu9250_mag_update(&mpu9250_data);
-                          printf("originValues:%03d %03d %03d  magValues: %03d %03d %03d\n",
-                          mpu9250_mag_get(&mpu9250_data, 1, 0),
-                          mpu9250_mag_get(&mpu9250_data, 3, 2),
-                          mpu9250_mag_get(&mpu9250_data, 5, 4),
-                          mpu9250_mag_x(&mpu9250_data),
-                          mpu9250_mag_y(&mpu9250_data),
-                          mpu9250_mag_z(&mpu9250_data));
+        mpu9250_mag_update(&mpu9250_data);
+        printf("originValues:%03d %03d %03d  magValues: %03d %03d %03d\n",
+        mpu9250_mag_get(&mpu9250_data, 1, 0),
+        mpu9250_mag_get(&mpu9250_data, 3, 2),
+        mpu9250_mag_get(&mpu9250_data, 5, 4),
+        mpu9250_mag_x(&mpu9250_data),
+        mpu9250_mag_y(&mpu9250_data),
+        mpu9250_mag_z(&mpu9250_data));
+#endif
 
-
-
-                          arc_demo();
-       }
+        drawBase();
+                          //arc_demo();
+    }
 
 
 

@@ -293,6 +293,7 @@ mpu9250_t mpu9250_data = {
 #define RADAR_MAX_DIST 1000 //レーダーで表示する中心からの最大距離
 int gDispWidth = 0;
 double gAngle=0;    //北を起点としてCW方向を正とする
+double gPreAngle=0;    //北を起点としてCW方向を正とする
 double gScale=1.0;
 color_t gBaseColor1 = {.r = 102, .g=255, .b = 102};
 //gBaseColor1.r = 102;
@@ -977,37 +978,43 @@ void init_encoder(){
     gpio_isr_handler_add(GPIO_INPUT_IO_1, gpio_isr_handler, (void*) GPIO_INPUT_IO_1);
 
 }
+
+//pre_x, pre_y 実世界の座標。
+// apos_x, apos_y 変換後の画像座標系での位置
+//angle 0-360
+void calcUIPos2(double pre_x, double pre_y, double angle, double scale, double * pos_x, double * pos_y, double *angle2, double *dist2){
+
+    //まずは、中心からの距離と角度を算出する。
+    double dist = sqrt(pre_x*pre_x+pre_y*pre_y);
+    double angle1 = atan2(pre_y, pre_x)*180.0/PI;
+    //printf("%f %f %f %f\n",atan2(1, 1),atan2(1, -1),atan2(-1, -1),atan2(-1, 1));
+    *angle2 = angle1-angle; //方位磁針の角度を反映する
+    *angle2 = fmod(*angle2, 360.0);
+    //printf("angle=%f angle2=%f",angle, *angle2);
+    if(*angle2<0){
+        *angle2+=360.0;
+    }
+    //printf(" angle22=%f\n",*angle2);
+    double rate = gDispRadius/(log10(RADAR_MAX_DIST*scale));
+
+    *dist2 = log10(dist)*rate;
+    *pos_x = *dist2*cos(*angle2*PI/180.0)+(dispWin.x2-dispWin.x1)/2.0;
+    *pos_y = -1.0*(*dist2)*sin(*angle2*PI/180.0)+(dispWin.y2-dispWin.y1)/2.0;
+    //printf("prex=%f, prey=%f, angle=%f, angle2=%f, rate=%f, dist=%f, dist2=%f, posx=%f, posy=%f, log10=%f, disp=%f\n",
+    //           pre_x, pre_y, angle, *angle2, rate, dist, *dist2, *pos_x,*pos_y, log10(RADAR_MAX_DIST*scale), gDispRadius);
+}
 //end of encoder
 
 //pre_x, pre_y 実世界の座標。
 // apos_x, apos_y 変換後の画像座標系での位置
 //angle 0-360
 void calcUIPos(double pre_x, double pre_y, double angle, double scale, double * pos_x, double * pos_y){
-
-    //まずは、中心からの距離と角度を算出する。
-    double dist = sqrt(pre_x*pre_x+pre_y*pre_y);
-    double angle1 = atan2(pre_y, pre_x)*180.0/PI;
-    printf("%f %f %f %f\n",atan2(1, 1),atan2(1, -1),atan2(-1, -1),atan2(-1, 1));
-    double angle2 = angle1-angle; //方位磁針の角度を反映する
-    angle2 = fmod(angle2, 360.0);
-    printf("angle=%f angle2=%f",angle, angle2);
-    if(angle2<0){
-        angle2+=360.0;
-    }
-    printf(" angle22=%f\n",angle2);
-    double rate = gDispRadius/(log10(RADAR_MAX_DIST*scale));
-
-    double dist2 = log10(dist)*rate;
-    *pos_x = dist2*cos(angle2*PI/180.0)+(dispWin.x2-dispWin.x1)/2.0;
-    *pos_y = -1.0*dist2*sin(angle2*PI/180.0)+(dispWin.y2-dispWin.y1)/2.0;
-    printf("prex=%f, prey=%f, angle=%f, angle2=%f, rate=%f, dist=%f, dist2=%f, posx=%f, posy=%f, log10=%f, disp=%f\n",
-               pre_x, pre_y, angle, angle2, rate, dist, dist2, *pos_x,*pos_y, log10(RADAR_MAX_DIST*scale), gDispRadius);
+    double angle2, dist2;
+    calcUIPos2(pre_x, pre_y, angle, scale, pos_x, pos_y, &angle2, &dist2);
 }
-
-
 void drawBase(){
     uint16_t x, y, th, n, i;
-    TFT_fillWindow(TFT_BLACK);
+    //TFT_fillWindow(TFT_BLACK);
 
     //draw out line
     x = (dispWin.x2 - dispWin.x1) / 2;
@@ -1019,7 +1026,7 @@ void drawBase(){
         TFT_drawCircle(x, y, gDispRadius-i, gBaseColor1);
     }
     //TFT_fillCircle(x, y, gDispRadius-6, TFT_BLACK);
-    TFT_drawArc((dispWin.x2-dispWin.x1)/2.0, (dispWin.y2-dispWin.y1)/2.0, gDispRadius, 50, 320, 50, TFT_WHITE, TFT_WHITE);
+    //TFT_drawArc((dispWin.x2-dispWin.x1)/2.0, (dispWin.y2-dispWin.y1)/2.0, gDispRadius, 50, 320, 50, TFT_WHITE, TFT_WHITE);
     //TFT_drawArc(x, y, gDispRadius, th, start, end, gBaseColor1, gBaseColor1);
     //printf("x=%d, y=%d, radius=%f\n", x, y, gDispRadius);
     double posx1, posy1, posx2, posy2;
@@ -1029,25 +1036,58 @@ void drawBase(){
     calcUIPos(RADAR_MAX_DIST, 0, gAngle, gScale, &posx1, &posy1);
     calcUIPos(-1.0*RADAR_MAX_DIST, 0, gAngle, gScale, &posx2, &posy2);
     TFT_drawLine(posx1,posy1,posx2,posy2,gBaseColor1);
+    if(gPreAngle!=gAngle){
+        calcUIPos(RADAR_MAX_DIST, 0, gPreAngle, gScale, &posx1, &posy1);
+        calcUIPos(-1.0*RADAR_MAX_DIST, 0, gPreAngle, gScale, &posx2, &posy2);
+        TFT_drawLine(posx1,posy1,posx2,posy2,TFT_BLACK);
+    }
 
     //y axis
     calcUIPos(0, RADAR_MAX_DIST, gAngle, gScale, &posx1, &posy1);
     calcUIPos(0, -1.0*RADAR_MAX_DIST, gAngle, 1, &posx2, &posy2);
     TFT_drawLine(posx1,posy1,posx2,posy2,gBaseColor1);
 
+    if(gPreAngle!=gAngle){
+        calcUIPos(0, RADAR_MAX_DIST, gPreAngle, gScale, &posx1, &posy1);
+        calcUIPos(0, -1.0*RADAR_MAX_DIST, gPreAngle, 1, &posx2, &posy2);
+        TFT_drawLine(posx1,posy1,posx2,posy2,TFT_BLACK);
+    }
+
     //arrow
     calcUIPos(0, 100, gAngle, 1.0, &posx1, &posy1);
     color_t tmpColor = {.r = 102, .g=250, .b = 102};
     font_rotate = gAngle;
     _fg = gBaseColor1;
+    font_transparent = 0;
     TFT_setFont(DEJAVU18_FONT, NULL);
     TFT_print("N", posx1, posy1);
+    //int fwidth, fheight;
+    //TFT_getfontsize(&fwidth, &fheight);
+    //printf("fwidth=%d, fheight=%d\n",fwidth, fheight);
+    double angle2, dist2;
+    if(gPreAngle!=gAngle){
+        calcUIPos2(0, 100, gPreAngle, 1.0, &posx1, &posy1, &angle2, &dist2);
+        printf("angle=%f, angle2=%f\n", gPreAngle, angle2);
+        TFT_drawArc((dispWin.x2-dispWin.x1)/2.0, (dispWin.y2-dispWin.y1)/2.0, dist2, 18, gPreAngle, gPreAngle+10, TFT_BLACK, TFT_BLACK);
+    }
+
+
+    //calcUIPos(0, 100, gPreAngle, 1.0, &posx1, &posy1);
+    //TFT_clearStringRect(posx1, posy1, "N");
+    //TFT_print("\r", posx1, posy1);
+    //_fg = TFT_BLACK;
+    //_bg = TFT_BLACK;
+    //TFT_print("N", posx1, posy1);
+
+
     font_rotate = 0;
+    _fg = gBaseColor1;
+    _bg = TFT_BLACK;
         //TFT_drawPolygon(posx1, posy1, 3, 10, tmpColor, gBaseColor1, 30, 3);
 
     //sub scale
-    calcUIPos(10, 0, 0, gScale, &posx1, &posy1);
-    TFT_drawCircle((dispWin.x2-dispWin.x1)/2.0,(dispWin.y2-dispWin.y1)/2.0, posx1-(dispWin.x2-dispWin.x1)/2.0, gBaseColor1);
+    //calcUIPos(10, 0, 0, gScale, &posx1, &posy1);
+    //TFT_drawCircle((dispWin.x2-dispWin.x1)/2.0,(dispWin.y2-dispWin.y1)/2.0, posx1-(dispWin.x2-dispWin.x1)/2.0, gBaseColor1);
     //TFT_print("10", 0, posy1);
 #endif
 
@@ -1065,25 +1105,25 @@ void drawBase(){
         scale = pow(10, i);
         calcUIPos(scale, 0, 0, gScale, &posx1, &posy1);
         TFT_drawCircle((dispWin.x2-dispWin.x1)/2.0,(dispWin.y2-dispWin.y1)/2.0, posx1-(dispWin.x2-dispWin.x1)/2.0, gBaseColor1);
-        sprintf(buf,"%4.0fmm\n",scale);
+        sprintf(buf,"%0.0fmm\n",scale);
           TFT_print(buf, (dispWin.x2-dispWin.x1)/2.0, posx1);
         printf("max=%f digits=%d scale=%f i=%d\n", currentMax, i, scale, i);
     }
 
-    sprintf(buf,"%4.0fmm\n", gScale*RADAR_MAX_DIST);
+    sprintf(buf,"%0.0fmm\n", gScale*RADAR_MAX_DIST);
     TFT_print(buf, (dispWin.x2-dispWin.x1)/2.0, (dispWin.y2-dispWin.y1)/2.0+gDispRadius);
-
+/*
     gScale+=0.2;
 
     if(gScale>10){
         gScale=0.1;
-    }
-
-    gAngle+=45;
+    }*/
+    gPreAngle=gAngle;
+    gAngle+=10;
     if(gAngle>=360){
         gAngle = gAngle-360;
     }
-    vTaskDelay(200 / portTICK_RATE_MS);
+    vTaskDelay(100 / portTICK_RATE_MS);
 }
 
 

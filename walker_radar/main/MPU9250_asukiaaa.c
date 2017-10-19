@@ -85,8 +85,8 @@ void mpu9250_mag_begin(mpu9250_t *data) {
 
   mpu9250_mag_read_adjust_values(data);
   mpu9250_mag_set_mode(AK8963_MODE_POWERDOWN);
-  //mpu9250_mag_set_mode(AK8963_MODE_CONTINUOUS_8HZ);
-  mpu9250_mag_set_mode(AK8963_MODE_CONTINUOUS_100HZ);
+  mpu9250_mag_set_mode(AK8963_MODE_CONTINUOUS_8HZ);
+  //mpu9250_mag_set_mode(AK8963_MODE_CONTINUOUS_100HZ);
 }
 
 void mpu9250_mag_update(mpu9250_t *data) {

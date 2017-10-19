@@ -276,6 +276,11 @@ int g_count =0;
 
 // ==================================================
 //compas setting
+#define COMPAS_MAX_Y 91
+#define COMPAS_MIN_Y 36
+#define COMPAS_MAX_X 8
+#define COMPAS_MIN_X -51
+
 mpu9250_t mpu9250_data = {
     .address = MPU9250_ADDRESS_AD0_LOW,
     .magXOffset = -60,
@@ -300,6 +305,10 @@ color_t gBaseColor1 = {.r = 102, .g=255, .b = 102};
 //gBaseColor1.g = 255;
 //gBaseColor1.b = 102;
 double gDispRadius=0;
+
+#define MEDIAN_BUFFER_LEN 3
+#define MEAN_BUFFER_LEN 5
+
 
 static void gap_event_handler(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param_t *param)
 {
@@ -1031,45 +1040,50 @@ void drawBase(){
     //printf("x=%d, y=%d, radius=%f\n", x, y, gDispRadius);
     double posx1, posy1, posx2, posy2;
 #if 1
+    int backAngle= 360 - gAngle;
+    int backPreAngle = 360 - gPreAngle;
+
     //drow axis
     //x axis
-    calcUIPos(RADAR_MAX_DIST, 0, gAngle, gScale, &posx1, &posy1);
-    calcUIPos(-1.0*RADAR_MAX_DIST, 0, gAngle, gScale, &posx2, &posy2);
+    calcUIPos(RADAR_MAX_DIST, 0, backAngle, gScale, &posx1, &posy1);
+    calcUIPos(-1.0*RADAR_MAX_DIST, 0, backAngle, gScale, &posx2, &posy2);
     TFT_drawLine(posx1,posy1,posx2,posy2,gBaseColor1);
     if(gPreAngle!=gAngle){
-        calcUIPos(RADAR_MAX_DIST, 0, gPreAngle, gScale, &posx1, &posy1);
-        calcUIPos(-1.0*RADAR_MAX_DIST, 0, gPreAngle, gScale, &posx2, &posy2);
+        calcUIPos(RADAR_MAX_DIST, 0, backPreAngle, gScale, &posx1, &posy1);
+        calcUIPos(-1.0*RADAR_MAX_DIST, 0, backPreAngle, gScale, &posx2, &posy2);
         TFT_drawLine(posx1,posy1,posx2,posy2,TFT_BLACK);
     }
 
     //y axis
-    calcUIPos(0, RADAR_MAX_DIST, gAngle, gScale, &posx1, &posy1);
-    calcUIPos(0, -1.0*RADAR_MAX_DIST, gAngle, 1, &posx2, &posy2);
+    calcUIPos(0, RADAR_MAX_DIST, backAngle, gScale, &posx1, &posy1);
+    calcUIPos(0, -1.0*RADAR_MAX_DIST, backAngle, 1, &posx2, &posy2);
     TFT_drawLine(posx1,posy1,posx2,posy2,gBaseColor1);
 
     if(gPreAngle!=gAngle){
-        calcUIPos(0, RADAR_MAX_DIST, gPreAngle, gScale, &posx1, &posy1);
-        calcUIPos(0, -1.0*RADAR_MAX_DIST, gPreAngle, 1, &posx2, &posy2);
+        calcUIPos(0, RADAR_MAX_DIST, backPreAngle, gScale, &posx1, &posy1);
+        calcUIPos(0, -1.0*RADAR_MAX_DIST, backPreAngle, 1, &posx2, &posy2);
         TFT_drawLine(posx1,posy1,posx2,posy2,TFT_BLACK);
     }
 
     //arrow
-    calcUIPos(0, 100, gAngle, 1.0, &posx1, &posy1);
-    color_t tmpColor = {.r = 102, .g=250, .b = 102};
-    font_rotate = gAngle;
-    _fg = gBaseColor1;
-    font_transparent = 0;
-    TFT_setFont(DEJAVU18_FONT, NULL);
-    TFT_print("N", posx1, posy1);
     //int fwidth, fheight;
     //TFT_getfontsize(&fwidth, &fheight);
     //printf("fwidth=%d, fheight=%d\n",fwidth, fheight);
     double angle2, dist2;
     if(gPreAngle!=gAngle){
-        calcUIPos2(0, 100, gPreAngle, 1.0, &posx1, &posy1, &angle2, &dist2);
-        printf("angle=%f, angle2=%f\n", gPreAngle, angle2);
-        TFT_drawArc((dispWin.x2-dispWin.x1)/2.0, (dispWin.y2-dispWin.y1)/2.0, dist2, 18, gPreAngle, gPreAngle+10, TFT_BLACK, TFT_BLACK);
+        int backPreAngle= 360 - gPreAngle;
+        calcUIPos2(0, 100, backPreAngle, 1.0, &posx1, &posy1, &angle2, &dist2);
+        printf("angle=%d, angle2=%f\n", backPreAngle, angle2);
+        TFT_drawArc((dispWin.x2-dispWin.x1)/2.0, (dispWin.y2-dispWin.y1)/2.0, dist2, 18, backPreAngle-2, backPreAngle+10, TFT_BLACK, TFT_BLACK);
     }
+    calcUIPos(0, 100, backAngle, 1.0, &posx1, &posy1);
+       color_t tmpColor = {.r = 102, .g=250, .b = 102};
+       font_rotate = backAngle;
+       _fg = gBaseColor1;
+       font_transparent = 0;
+       TFT_setFont(DEJAVU18_FONT, NULL);
+       TFT_print("N", posx1, posy1);
+
 
 
     //calcUIPos(0, 100, gPreAngle, 1.0, &posx1, &posy1);
@@ -1119,12 +1133,74 @@ void drawBase(){
         gScale=0.1;
     }*/
     gPreAngle=gAngle;
-    gAngle+=10;
+    /*gAngle+=10;
     if(gAngle>=360){
         gAngle = gAngle-360;
-    }
+    }*/
     vTaskDelay(100 / portTICK_RATE_MS);
 }
+/* 配列の要素を交換する */
+void Swap(int x[ ], int i, int j)
+{
+  float temp;
+
+  temp = x[i];
+  x[i] = x[j];
+  x[j] = temp;
+}
+
+//QSort from http://www1.cts.ne.jp/~clab/hsample/Sort/Sort9.html
+void QSort(int x[ ], int left, int right)
+{
+  int i, j;
+  int pivot;
+
+  i = left;                      /* ソートする配列の一番小さい要素の添字 */
+  j = right;                     /* ソートする配列の一番大きい要素の添字 */
+
+  pivot = x[(left + right) / 2]; /* 基準値を配列の中央付近にとる */
+
+  while (1) {                    /* 無限ループ */
+
+    while (x[i] < pivot)       /* pivot より大きい値が */
+      i++;                   /* 出るまで i を増加させる */
+
+    while (pivot < x[j])       /* pivot より小さい値が */
+      j--;                   /*  出るまで j を減少させる */
+    if (i >= j)                /* i >= j なら */
+      break;                 /* 無限ループから抜ける */
+
+    Swap(x, i, j);             /* x[i] と x[j]を交換 */
+    i++;                       /* 次のデータ */
+    j--;
+  }
+  //ShowData(x, 10);               /* 途中経過を表示 */
+
+  if (left < i - 1)              /* 基準値の左に 2 以上要素があれば */
+    QSort(x, left, i - 1);     /* 左の配列を Q ソートする */
+  if (j + 1 <  right)            /* 基準値の右に 2 以上要素があれば */
+    QSort(x, j + 1, right);    /* 右の配列を Q ソートする */
+}
+int smoothByMedianFilter(int *buffer) {
+  static int sortBuffer[MEDIAN_BUFFER_LEN];
+
+  for (int i = 0; i < MEDIAN_BUFFER_LEN; i++)
+    sortBuffer[i] = buffer[i];
+
+  QSort(sortBuffer, 0, MEDIAN_BUFFER_LEN - 1);
+
+  return sortBuffer[MEDIAN_BUFFER_LEN / 2];
+}
+
+int smoothByMeanfilter(int *buffer, int len) {
+  long sum = 0;
+
+  for (int i = 0; i < len; i++) {
+    sum += buffer[i];
+  }
+  return (int)(sum / len);
+}
+
 
 
 
@@ -1180,6 +1256,18 @@ void app_main()
 
 
     int cnt = 0;
+    float compasX, compasY;
+    static int medianBufferX[MEDIAN_BUFFER_LEN];
+    static int medianBufferIndexX=0;
+    static int meanBufferX[MEAN_BUFFER_LEN];
+    static int meanBufferIndexX=0;
+
+    static int medianBufferY[MEDIAN_BUFFER_LEN];
+    static int medianBufferIndexY=0;
+    static int meanBufferY[MEAN_BUFFER_LEN];
+    static int meanBufferIndexY=0;
+
+    int rawX, rawY;
     while (1) {
 #if 0
         printf("cnt: %d\n", cnt++);
@@ -1197,7 +1285,7 @@ void app_main()
             ESP_LOGI(GATTS_TABLE_TAG, "prf_char[%x] =%x",i,prf_char[i]);
         }
         ESP_LOGI(GATTS_TABLE_TAG, "\n");
-
+#endif
         mpu9250_mag_update(&mpu9250_data);
         printf("originValues:%03d %03d %03d  magValues: %03d %03d %03d\n",
         mpu9250_mag_get(&mpu9250_data, 1, 0),
@@ -1206,7 +1294,38 @@ void app_main()
         mpu9250_mag_x(&mpu9250_data),
         mpu9250_mag_y(&mpu9250_data),
         mpu9250_mag_z(&mpu9250_data));
-#endif
+
+        medianBufferX[medianBufferIndexX] = mpu9250_mag_get(&mpu9250_data, 1, 0);
+        medianBufferIndexX = (medianBufferIndexX + 1)%MEDIAN_BUFFER_LEN;
+        rawX = smoothByMedianFilter(medianBufferX);
+
+        meanBufferX[meanBufferIndexX] = rawX;
+        meanBufferIndexX = (meanBufferIndexX + 1)%MEAN_BUFFER_LEN;
+        rawX = smoothByMeanfilter(meanBufferX, MEAN_BUFFER_LEN);
+
+        medianBufferY[medianBufferIndexY] = mpu9250_mag_get(&mpu9250_data, 3, 2);
+        medianBufferIndexY = (medianBufferIndexY + 1)%MEDIAN_BUFFER_LEN;
+        rawY = smoothByMedianFilter(medianBufferY);
+
+        //mpu9250_mag_get(&mpu9250_data, 5, 4);
+
+        meanBufferY[meanBufferIndexY] = rawY;
+        meanBufferIndexY = (meanBufferIndexY + 1)%MEAN_BUFFER_LEN;
+        rawY = smoothByMeanfilter(meanBufferY, MEAN_BUFFER_LEN);
+
+
+        compasX = (rawX-COMPAS_MIN_X-(COMPAS_MAX_X-COMPAS_MIN_X)/2.0)/(float)((COMPAS_MAX_X-COMPAS_MIN_X)/2.0);
+        compasY = (rawY-COMPAS_MIN_Y-(COMPAS_MAX_Y-COMPAS_MIN_Y)/2.0)/(float)((COMPAS_MAX_Y-COMPAS_MIN_Y)/2.0);
+        if(compasX > 1.0) compasX = 1.0;
+        if(compasX < -1.0) compasX = -1.0;
+        if(compasY > 1.0) compasY = 1.0;
+        if(compasY < -1.0) compasY = -1.0;
+
+        gAngle = 90-atan2(compasY, compasX)*180.0/PI;
+        if(gAngle<0) gAngle+=360.0;
+        if(gAngle>360) gAngle-=360.0;
+
+        printf("compasX=%f, compasY=%f, gAngle=%f\n", compasX, compasY, gAngle);
 
         drawBase();
                           //arc_demo();

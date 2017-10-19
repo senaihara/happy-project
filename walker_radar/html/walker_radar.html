@@ -247,15 +247,15 @@ $(function() {
         	var curPosArray = tmpArray.concat(arrayLati).concat(arrayLong);
         	     
          log("curPosArray"+curPosArray)
-       	var sendBuf = new Int8Array(4);
+       	var sendBuf = new Int8Array(8);
        	sendBuf[0] = arrayLati[0];
        	sendBuf[1] = arrayLati[1];
        	sendBuf[2] = arrayLati[2];
        	sendBuf[3] = arrayLati[3];
-       	//sendBuf[4] = arrayLong[0];
-       	//sendBuf[5] = arrayLong[1];
-       	//sendBuf[6] = arrayLong[2];
-       	//sendBuf[7] = arrayLong[3];
+       	sendBuf[4] = arrayLong[0];
+       	sendBuf[5] = arrayLong[1];
+       	sendBuf[6] = arrayLong[2];
+       	sendBuf[7] = arrayLong[3];
        	
        	
        	log("sendBuf "+sendBuf);

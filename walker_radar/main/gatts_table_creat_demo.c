@@ -1278,9 +1278,9 @@ void app_main()
         // esp_ble_gatts_get_attr_value(42, 6, (uint8_t*)value);
         esp_ble_gatts_get_attr_value(42,  &length, &prf_char);
 
-        //if(length==4){
-        unsigned char buf[4];
-        memcpy(buf, prf_char, 4);
+        if(length==8){
+        unsigned char latBuf[4], longBuf[4];
+        memcpy(latBuf, prf_char, 4);
         /*buf[0] = 123;
         buf[1] = 49;
         buf[2] = 18;
@@ -1289,11 +1289,11 @@ void app_main()
         buf[1] = 0x31;
         buf[2] = 0x12;
         buf[3] =0x42;*/
-
-        float *gLati = (float*)buf;
-        //double gLong = *(prf_char+4);
-        printf("gLati=%f\n", *gLati);
-        //}
+        float *gLati = (float*)latBuf;
+        memcpy(longBuf, prf_char+4, 4);
+        float *gLong = (float*)longBuf;
+        printf("gLati=%f gLong=%f\n", *gLati, *gLong);
+        }
 
         //esp_ble_gatts_set_attr_value(45,  length, prf_char);
 

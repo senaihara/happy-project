@@ -134,7 +134,6 @@ static struct gatts_profile_inst heart_rate_profile_tab[HEART_PROFILE_NUM] = {
         .gatts_cb = gatts_profile_event_handler,
         .gatts_if = ESP_GATT_IF_NONE,       /* Not get the gatt_if, so initial is ESP_GATT_IF_NONE */
     },
-    
 };
 
 /*
@@ -160,11 +159,8 @@ static const uint8_t char_prop_read = ESP_GATT_CHAR_PROP_BIT_READ;
 static const uint8_t char_prop_read_write = ESP_GATT_CHAR_PROP_BIT_WRITE|ESP_GATT_CHAR_PROP_BIT_READ;
 static const uint8_t char_prop_read_write_notify = ESP_GATT_CHAR_PROP_BIT_WRITE|ESP_GATT_CHAR_PROP_BIT_READ|ESP_GATT_CHAR_PROP_BIT_NOTIFY;
 
-
-/// Heart Rate Sensor Service - Heart Rate Measurement Characteristic, notify
 static const uint16_t heart_rate_meas_uuid = ESP_GATT_HEART_RATE_MEAS;
 static const uint8_t heart_measurement_ccc[2] ={ 0x00, 0x00};
-
 
 /// Heart Rate Sensor Service -Body Sensor Location characteristic, read
 static const uint16_t body_sensor_location_uuid = ESP_GATT_BODY_SENSOR_LOCATION;
@@ -183,12 +179,16 @@ static uint8_t heart_rate_service_uuid2[2] = {
 };
 static uint8_t cur_pos_uuid[2] = {0x33, 0x2a};
 static uint8_t map_obj_uuid[2] = {0x34, 0x2a};
+static uint8_t put_obj_uuid[2] = {0x35, 0x2a};
 
-static const uint8_t cur_pos_val[9] ={0x00, 0x00,0x00, 0x00,0x00, 0x00,0x00, 0x00,0x00,};
+static const uint8_t cur_pos_val[9] ={0x00, 0x00, 0x00,0x00, 0x00,0x00, 0x00,0x00, 0x00};
 static const uint8_t map_obj_val[16] ={0x00,0x00, 0x00,0x00, 0x00,0x00, 0x00,0x00,0x00,0x00, 0x00,0x00, 0x00,0x00, 0x00,0x00};
+//static const uint8_t put_obj_val[10] ={0x00,0x00, 0x00,0x00, 0x00,0x00, 0x00,0x00,0x00,0x00};
+static const uint8_t put_obj_val[8] ={0x00,0x00, 0x00,0x00, 0x00,0x00, 0x00,0x00};
 
 #define HANDLE_CUR_POS 42
 #define HANDLE_MAP_OBJ 44
+#define HANDLE_PUT_OBJ 46
 
 
 /// Full HRS Database Description - Used to add attributes into the database
@@ -221,6 +221,7 @@ static const esp_gatts_attr_db_t heart_rate_gatt_db[HRS_IDX_NB] =
     {{ESP_GATT_AUTO_RSP}, {ESP_UUID_LEN_16, (uint8_t *)&character_client_config_uuid, ESP_GATT_PERM_READ|ESP_GATT_PERM_WRITE,
       sizeof(uint16_t),sizeof(heart_measurement_ccc), (uint8_t *)heart_measurement_ccc}},
 */
+
     // Map Object Char
     [HRS_IDX_MAP_OBJ_CHAR]  =
     {{ESP_GATT_AUTO_RSP}, {ESP_UUID_LEN_16, (uint8_t *)&character_declaration_uuid, ESP_GATT_PERM_READ,
@@ -230,17 +231,35 @@ static const esp_gatts_attr_db_t heart_rate_gatt_db[HRS_IDX_NB] =
     [HRS_IDX_MAP_OBJ_VAL]   =
     {{ESP_GATT_AUTO_RSP}, {ESP_UUID_LEN_16, (uint8_t *)&map_obj_uuid, ESP_GATT_PERM_WRITE|ESP_GATT_PERM_READ,
      // sizeof(uint8_t), sizeof(body_sensor_loc_val), (uint8_t *)body_sensor_loc_val}},
-            sizeof(map_obj_val),sizeof(map_obj_val), (uint8_t *)map_obj_val}},
+    sizeof(map_obj_val),sizeof(map_obj_val), (uint8_t *)map_obj_val}},
+
+    //Put Object Val
+    [HRS_IDX_PUT_OBJ_CHAR]            =
+    {{ESP_GATT_AUTO_RSP}, {ESP_UUID_LEN_16, (uint8_t *)&character_declaration_uuid, ESP_GATT_PERM_READ,
+      //CHAR_DECLARATION_SIZE,CHAR_DECLARATION_SIZE, (uint8_t *)&char_prop_notify}},
+       CHAR_DECLARATION_SIZE,CHAR_DECLARATION_SIZE, (uint8_t *)&char_prop_read_write_notify}},
+
+    // Put Object Value
+    [HRS_IDX_PUT_OBJ_VAL]               =
+          {{ESP_GATT_AUTO_RSP}, {sizeof(put_obj_uuid), (uint8_t *)&put_obj_uuid, ESP_GATT_PERM_WRITE|ESP_GATT_PERM_READ,
+          //  HRPS_HT_MEAS_MAX_LEN,0, NULL}},
+          sizeof(put_obj_val),sizeof(put_obj_val), (uint8_t *)put_obj_val}},
+
+    [HRS_IDX_PUT_OBJ_NTF_CFG]        =
+         {{ESP_GATT_AUTO_RSP}, {ESP_UUID_LEN_16, (uint8_t *)&character_client_config_uuid, ESP_GATT_PERM_READ|ESP_GATT_PERM_WRITE,
+         sizeof(uint16_t),sizeof(heart_measurement_ccc), (uint8_t *)heart_measurement_ccc}},
+
 
     // Heart Rate Control Point Characteristic Declaration
-    [HRS_IDX_HR_CTNL_PT_CHAR]          = 
+   /* [HRS_IDX_HR_CTNL_PT_CHAR]          =
     {{ESP_GATT_AUTO_RSP}, {ESP_UUID_LEN_16, (uint8_t *)&character_declaration_uuid, ESP_GATT_PERM_READ,
       CHAR_DECLARATION_SIZE,CHAR_DECLARATION_SIZE, (uint8_t *)&char_prop_read_write}},
                                          			
     // Heart Rate Control Point Characteristic Value
     [HRS_IDX_HR_CTNL_PT_VAL]             = 
     {{ESP_GATT_AUTO_RSP}, {ESP_UUID_LEN_16, (uint8_t *)&heart_rate_ctrl_point, ESP_GATT_PERM_WRITE|ESP_GATT_PERM_READ,
-      sizeof(uint8_t), sizeof(heart_ctrl_point), (uint8_t *)heart_ctrl_point}},  
+      sizeof(uint8_t), sizeof(heart_ctrl_point), (uint8_t *)heart_ctrl_point}},
+      */
 };
 
 esp_gatt_if_t gatts_if_for_indicate = ESP_GATT_IF_NONE;
@@ -318,12 +337,15 @@ typedef struct {
     float posLong;
     float angle;
     int type;
+    int owner;
     int status;
     int enableFg;
     int viewFg;
 } t_objInfo;
 
 t_objInfo gMyObj;
+t_objInfo gMapObj;
+t_objInfo gPutObj;
 
 static void gap_event_handler(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param_t *param)
 {
@@ -373,17 +395,41 @@ static void gatts_profile_event_handler(esp_gatts_cb_event_t event,
     	                    param->write.handle);
     	    ESP_LOGI(GATTS_TABLE_TAG, "GATT_WRITE_EVT, value len %d, value %08x\n",
     	                    param->write.len, *(uint32_t *) param->write.value);
+    	    uint16_t length = 0;
+        uint8_t *p;
+        //update current pos
+    	    if(param->write.handle==HANDLE_CUR_POS){
+    	        esp_ble_gatts_get_attr_value(HANDLE_CUR_POS,  &length, &p);
+            unsigned char latBuf[4], longBuf[4];
+            memcpy(latBuf, p+1, 4);
+            memcpy(longBuf, p+5, 4);
+            gMyObj.posLati = *((float*)latBuf);
+            gMyObj.posLong = *((float*)longBuf);
+            printf("updated myObj gLati=%f gLong=%f\n", gMyObj.posLati, gMyObj.posLong);
+        }
+
     	    //Get Map Obj
     	    if(param->write.handle==HANDLE_MAP_OBJ){
-    	        uint16_t length = 0;
-    	        uint8_t *p;
-    	        //get current pos
-    	        esp_ble_gatts_get_attr_value(HANDLE_MAP_OBJ,  &length, &p);
-    	        for(int i = 0; i < length; i++){
-    	            printf("prf_char[%x] =%x",i,p[i]);
-    	        }
-    	        printf("\n");
-    	    }
+    	         esp_ble_gatts_get_attr_value(HANDLE_MAP_OBJ,  &length, &p);
+            unsigned char latBuf[4], longBuf[4], angleBuf[2];
+            //id[1],lat[4],long[4],angle[2],type[1],owner[1],status[1],enableFg[1],viewFg[1]
+            t_objInfo tmpObj;
+            tmpObj.id = *(p);
+            memcpy(latBuf, p+1, 4);
+            tmpObj.posLati = gMyObj.posLati = *((float*)latBuf);
+            memcpy(longBuf, p+5, 4);
+            tmpObj.posLong = *((float*)longBuf);
+            memcpy(angleBuf, p+9, 2);
+            tmpObj.angle = *((short*)angleBuf);
+            tmpObj.type = *(p+11);
+            tmpObj.owner = *(p+12);
+            tmpObj.status = *(p+13);
+            tmpObj.enableFg = *(p+14);
+            tmpObj.viewFg = *(p+15);
+
+            printf("updated mapObj id=%d lati=%f long=%f angle=%f type=%d owner=%d status=%d enableFg=%d viewFg=%d\n",
+                    tmpObj.id, tmpObj.posLati, tmpObj.posLong, tmpObj.angle, tmpObj.type, tmpObj.owner, tmpObj.status, tmpObj.enableFg, tmpObj.viewFg);
+        }
       	 	break;
     	case ESP_GATTS_EXEC_WRITE_EVT:
 		break;
@@ -512,6 +558,48 @@ static void ble_indicate(int value) {
             length, prf_char, false);
 
 }
+
+static void ble_indicate2(int value) {
+    if (gatts_if_for_indicate == ESP_GATT_IF_NONE) {
+        printf("cannot indicate because gatts_if_for_indicate is NONE\n");
+        return;
+    }
+    printf("indicate %d to gatts_if:%d\n", value, gatts_if_for_indicate);
+    uint16_t attr_handle = HANDLE_PUT_OBJ;
+    uint8_t value_len = 1;
+    uint8_t value_arr[] = { value };
+    uint16_t length = 0;
+                          const uint8_t *prf_char;
+    esp_ble_gatts_get_attr_value(HANDLE_PUT_OBJ,  &length, &prf_char);
+
+    //esp_ble_gatts_send_indicate(gatts_if_for_indicate, 0, attr_handle,
+     //       value_len, value_arr, false);
+    esp_ble_gatts_send_indicate(gatts_if_for_indicate, 0, attr_handle,
+            length, prf_char, false);
+
+}
+static void notifyPutObject() {
+    if (gatts_if_for_indicate == ESP_GATT_IF_NONE) {
+        printf("cannot indicate because gatts_if_for_indicate is NONE\n");
+        return;
+    }
+    uint16_t attr_handle = HANDLE_PUT_OBJ;
+    uint8_t value_len = 1;
+    int value = 2;
+    uint8_t value_arr[] = { value };
+    uint16_t length = 0;
+    const uint8_t *prf_char;
+    //esp_ble_gatts_get_attr_value(HANDLE_PUT_OBJ,  &length, &prf_char);
+
+    //esp_ble_gatts_send_indicate(gatts_if_for_indicate, 0, attr_handle,
+     //       value_len, value_arr, false);
+    esp_ble_gatts_send_indicate(gatts_if_for_indicate, 0, attr_handle,
+            sizeof(t_objInfo), &gPutObj, false);
+//esp_ble_gatts_send_indicate(gatts_if_for_indicate, 0, attr_handle,
+ //           length, prf_char, false);
+
+}
+
 
 //----------------------
 static void _checkTime()
@@ -1298,30 +1386,12 @@ void app_main()
 #if 1
         printf("cnt: %d\n", cnt++);
         vTaskDelay(5000 / portTICK_RATE_MS);
- //       ble_indicate(cnt);
+ //       ble_indicate2(cnt);
+        printf("sizeof objInfo=%d\n", sizeof(t_objInfo));
+        memcpy(&gPutObj, &gMapObj, sizeof(t_objInfo));
 
-        uint16_t length = 0;
-        uint8_t *p;
-        //get current pos
-        esp_ble_gatts_get_attr_value(42,  &length, &p);
-        if(length==9 && *p==1){
-            unsigned char latBuf[4], longBuf[4];
-            memcpy(latBuf, p+1, 4);
-            memcpy(longBuf, p+5, 4);
-            gMyObj.posLati = *((float*)latBuf);
-            gMyObj.posLong = *((float*)longBuf);
-            printf("gLati=%f gLong=%f\n", gMyObj.posLati, gMyObj.posLong);
-        }
+       notifyPutObject();
 
-        //get object info
-
-        //esp_ble_gatts_set_attr_value(45,  length, prf_char);
-
-        ESP_LOGI(GATTS_TABLE_TAG, "the gatts demo char length = %x\n", length);
-        for(int i = 0; i < length; i++){
-            ESP_LOGI(GATTS_TABLE_TAG, "prf_char[%x] =%x",i,p[i]);
-        }
-        ESP_LOGI(GATTS_TABLE_TAG, "\n");
 #endif
 
 //comasp

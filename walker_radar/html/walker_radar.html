@@ -10,6 +10,7 @@
 <script>
     var gCharaCurPos = {};
     var gCharaMapObj = {};
+    var gCharaPutObj = {};
     var gDevice = {};
     var gService = {};
     var gLati;
@@ -112,6 +113,7 @@
             const SERVICE_UUID =0x0d18;
             const CHARA_UUID_CUR_POS = 0x2a33;
             const CHARA_UUID_MAP_OBJ = 0x2a34;
+            const CHARA_UUID_PUT_OBJ = 0x2a35;
             navigator.bluetooth.requestDevice({filters: [{services: [SERVICE_UUID]}]})
             .then(device => {
                 log('Connecting to GATT Server...');
@@ -125,6 +127,7 @@
             .then(service => {
                 gService = service;
                 log('Getting Characteristic...');
+                
                 service.getCharacteristic(CHARA_UUID_CUR_POS).then(characteristic => {
                     gCharaCurPos = characteristic;    
                     log('> Characteristic UUID:  ' + characteristic.uuid);
@@ -135,6 +138,32 @@
                     gCharaMapObj = characteristic;
                     log('> Characteristic UUID:  ' + characteristic.uuid);
                 });
+                
+                
+               return service.getCharacteristic(CHARA_UUID_PUT_OBJ).then(characteristic => {
+                    gCharaPutObj = characteristic;
+                log('> Characteristic UUID:  ' + characteristic.uuid);
+                log('> Broadcast:            ' + characteristic.properties.broadcast);
+                log('> Read:                 ' + characteristic.properties.read);
+                log('> Write w/o response:   ' +
+                      characteristic.properties.writeWithoutResponse);
+                log('> Write:                ' + characteristic.properties.write);
+                log('> Notify:               ' + characteristic.properties.notify);
+                log('> Indicate:             ' + characteristic.properties.indicate);
+                log('> Signed Write:         ' +
+                      characteristic.properties.authenticatedSignedWrites);
+                log('> Queued Write:         ' + characteristic.properties.reliableWrite);
+                log('> Writable Auxiliaries: ' +
+                      characteristic.properties.writableAuxiliaries);
+  
+                    return gCharaPutObj.startNotifications().then(_ => {
+                        log('> Notifications started');
+                        gCharaPutObj.addEventListener('characteristicvaluechanged',
+                        handleNotifications);
+                    });
+
+               });
+
             })
             /*
            .then(characteristic => {
@@ -256,12 +285,12 @@
             sendBuf[7] = arrayLong[2];
             sendBuf[8] = arrayLong[3];
             sendBuf[9] = arrayAngle[0];
-            sendBuf[10] = arrayAngle[2];
-            sendBuf[11] = 1;          //type
+            sendBuf[10] = arrayAngle[1];
+            sendBuf[11] = 1;//type
             sendBuf[12] = 2;//owner
-            sendBuf[13] = 3; //status
-            sendBuf[14] = 4; //enableFg
-            sendBuf[15] = 5; //viewFg
+            sendBuf[13] = 3;//status
+            sendBuf[14] = 4;//enableFg
+            sendBuf[15] = 5;//viewFg
             
             log("update obj sendBuf "+sendBuf);
             gCharaMapObj.writeValue(sendBuf);
@@ -283,17 +312,17 @@
   
   });
   
-  function handleNotifications(event) {
-  let value = event.target.value;
-  let a = [];
-  // Convert raw data bytes to hex values just for the sake of showing something.
-  // In the "real" world, you'd use data.getUint8, data.getUint16 or even
-  // TextDecoder to process raw data bytes.
-  for (let i = 0; i < value.byteLength; i++) {
-    a.push('0x' + ('00' + value.getUint8(i).toString(16)).slice(-2));
-  }
-  log('> notify ' + a.join(' '));
-}
+    function handleNotifications(event) {
+        let value = event.target.value;
+        let a = [];
+        // Convert raw data bytes to hex values just for the sake of showing something.
+        // In the "real" world, you'd use data.getUint8, data.getUint16 or even
+        // TextDecoder to process raw data bytes.
+        for (let i = 0; i < value.byteLength; i++) {
+            a.push('0x' + ('00' + value.getUint8(i).toString(16)).slice(-2));
+        }
+        log('> notify ' + a.join(' '));
+    }
   
   function doubleToByteArray(number) {
     var buffer = new ArrayBuffer(8);         // JS numbers are 8 bytes long, or 64 bits

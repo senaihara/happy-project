@@ -181,11 +181,11 @@ static uint8_t heart_rate_service_uuid2[2] = {
       0x18, 0x0D,
 
 };
-static uint8_t put_obj_uuid[2] = {0x33, 0x2a};
+static uint8_t cur_pos_uuid[2] = {0x33, 0x2a};
+static uint8_t map_obj_uuid[2] = {0x34, 0x2a};
 
 static const uint8_t cur_pos_val[8] ={0x00,0x00, 0x00,0x00, 0x00,0x00, 0x00,0x00,};
-
-static const uint8_t cur_pos_val2[8] ={0x00,0x00, 0x00,0x00, 0x00,0x00, 0x00,0x00,};
+static const uint8_t map_obj_val[8] ={0x00,0x00, 0x00,0x00, 0x00,0x00, 0x00,0x00,};
 
 /// Full HRS Database Description - Used to add attributes into the database
 static const esp_gatts_attr_db_t heart_rate_gatt_db[HRS_IDX_NB] =
@@ -193,42 +193,40 @@ static const esp_gatts_attr_db_t heart_rate_gatt_db[HRS_IDX_NB] =
     // Heart Rate Service Declaration
     [HRS_IDX_SVC]                      	=  
     //{{ESP_GATT_AUTO_RSP}, {ESP_UUID_LEN_16, (uint8_t *)&heart_rate_service_uuid2, ESP_GATT_PERM_READ,
-
     {{ESP_GATT_AUTO_RSP}, {ESP_UUID_LEN_16, (uint8_t *)&primary_service_uuid, ESP_GATT_PERM_READ,
       //sizeof(uint16_t), sizeof(heart_rate_svc), (uint8_t *)&heart_rate_svc}},
        sizeof(uint16_t), sizeof(heart_rate_service_uuid2), (uint8_t *)&heart_rate_service_uuid2}},
 
-    // Heart Rate Measurement Characteristic Declaration
-    [HRS_IDX_HR_MEAS_CHAR]            = 
+    // CurrentPos Characteristic
+    [HRS_IDX_CUR_POS_CHAR]            =
     {{ESP_GATT_AUTO_RSP}, {ESP_UUID_LEN_16, (uint8_t *)&character_declaration_uuid, ESP_GATT_PERM_READ,
       //CHAR_DECLARATION_SIZE,CHAR_DECLARATION_SIZE, (uint8_t *)&char_prop_notify}},
        CHAR_DECLARATION_SIZE,CHAR_DECLARATION_SIZE, (uint8_t *)&char_prop_read_write_notify}},
 
-
-    // Heart Rate Measurement Characteristic Value
-    [HRS_IDX_HR_MEAS_VAL]             	=   
-          {{ESP_GATT_AUTO_RSP}, {sizeof(put_obj_uuid), (uint8_t *)&put_obj_uuid, ESP_GATT_PERM_WRITE|ESP_GATT_PERM_READ,
+    // CurrentPos Value
+    [HRS_IDX_CUR_POS_VAL]             	=
+          {{ESP_GATT_AUTO_RSP}, {sizeof(cur_pos_uuid), (uint8_t *)&cur_pos_uuid, ESP_GATT_PERM_WRITE|ESP_GATT_PERM_READ,
           //  HRPS_HT_MEAS_MAX_LEN,0, NULL}},
           sizeof(cur_pos_val),sizeof(cur_pos_val), (uint8_t *)cur_pos_val}},
 
     //{{ESP_GATT_AUTO_RSP}, {ESP_UUID_LEN_16, (uint8_t *)&heart_rate_meas_uuid, ESP_GATT_PERM_READ,
     //  HRPS_HT_MEAS_MAX_LEN,0, NULL}},
-
+/*
     // Heart Rate Measurement Characteristic - Client Characteristic Configuration Descriptor
     [HRS_IDX_HR_MEAS_NTF_CFG]     	=    
     {{ESP_GATT_AUTO_RSP}, {ESP_UUID_LEN_16, (uint8_t *)&character_client_config_uuid, ESP_GATT_PERM_READ|ESP_GATT_PERM_WRITE,
       sizeof(uint16_t),sizeof(heart_measurement_ccc), (uint8_t *)heart_measurement_ccc}},
-
-    // Body Sensor Location Characteristic Declaration
-    [HRS_IDX_BOBY_SENSOR_LOC_CHAR]  = 
+*/
+    // Map Object Char
+    [HRS_IDX_MAP_OBJ_CHAR]  =
     {{ESP_GATT_AUTO_RSP}, {ESP_UUID_LEN_16, (uint8_t *)&character_declaration_uuid, ESP_GATT_PERM_READ,
       CHAR_DECLARATION_SIZE,CHAR_DECLARATION_SIZE, (uint8_t *)&char_prop_read}},
 
-    // Body Sensor Location Characteristic Value
-    [HRS_IDX_BOBY_SENSOR_LOC_VAL]   = 
-    {{ESP_GATT_AUTO_RSP}, {ESP_UUID_LEN_16, (uint8_t *)&body_sensor_location_uuid, ESP_GATT_PERM_READ,
+    // Map Object Val
+    [HRS_IDX_MAP_OBJ_VAL]   =
+    {{ESP_GATT_AUTO_RSP}, {ESP_UUID_LEN_16, (uint8_t *)&map_obj_uuid, ESP_GATT_PERM_READ,
      // sizeof(uint8_t), sizeof(body_sensor_loc_val), (uint8_t *)body_sensor_loc_val}},
-            sizeof(cur_pos_val2),sizeof(cur_pos_val2), (uint8_t *)cur_pos_val2}},
+            sizeof(map_obj_val),sizeof(cur_pos_val), (uint8_t *)map_obj_val}},
 
     // Heart Rate Control Point Characteristic Declaration
     [HRS_IDX_HR_CTNL_PT_CHAR]          = 
@@ -297,14 +295,15 @@ mpu9250_t mpu9250_data = {
 //radar init
 #define RADAR_MAX_DIST 1000 //レーダーで表示する中心からの最大距離
 int gDispWidth = 0;
-double gAngle=0;    //北を起点としてCW方向を正とする
-double gPreAngle=0;    //北を起点としてCW方向を正とする
-double gScale=1.0;
+float gAngle=0;    //北を起点としてCW方向を正とする
+float gPreAngle=0;    //北を起点としてCW方向を正とする
+float gScale=1.0;
 color_t gBaseColor1 = {.r = 102, .g=255, .b = 102};
 //gBaseColor1.r = 102;
 //gBaseColor1.g = 255;
 //gBaseColor1.b = 102;
-double gDispRadius=0;
+float
+gDispRadius=0;
 
 #define MEDIAN_BUFFER_LEN 3
 #define MEAN_BUFFER_LEN 5
@@ -991,11 +990,11 @@ void init_encoder(){
 //pre_x, pre_y 実世界の座標。
 // apos_x, apos_y 変換後の画像座標系での位置
 //angle 0-360
-void calcUIPos2(double pre_x, double pre_y, double angle, double scale, double * pos_x, double * pos_y, double *angle2, double *dist2){
+void calcUIPos2(float pre_x, float pre_y, float angle, float scale, float * pos_x, float * pos_y, float *angle2, float *dist2){
 
     //まずは、中心からの距離と角度を算出する。
-    double dist = sqrt(pre_x*pre_x+pre_y*pre_y);
-    double angle1 = atan2(pre_y, pre_x)*180.0/PI;
+    float dist = sqrt(pre_x*pre_x+pre_y*pre_y);
+    float angle1 = atan2(pre_y, pre_x)*180.0/PI;
     //printf("%f %f %f %f\n",atan2(1, 1),atan2(1, -1),atan2(-1, -1),atan2(-1, 1));
     *angle2 = angle1-angle; //方位磁針の角度を反映する
     *angle2 = fmod(*angle2, 360.0);
@@ -1004,7 +1003,7 @@ void calcUIPos2(double pre_x, double pre_y, double angle, double scale, double *
         *angle2+=360.0;
     }
     //printf(" angle22=%f\n",*angle2);
-    double rate = gDispRadius/(log10(RADAR_MAX_DIST*scale));
+    float rate = gDispRadius/(log10(RADAR_MAX_DIST*scale));
 
     *dist2 = log10(dist)*rate;
     *pos_x = *dist2*cos(*angle2*PI/180.0)+(dispWin.x2-dispWin.x1)/2.0;
@@ -1017,8 +1016,8 @@ void calcUIPos2(double pre_x, double pre_y, double angle, double scale, double *
 //pre_x, pre_y 実世界の座標。
 // apos_x, apos_y 変換後の画像座標系での位置
 //angle 0-360
-void calcUIPos(double pre_x, double pre_y, double angle, double scale, double * pos_x, double * pos_y){
-    double angle2, dist2;
+void calcUIPos(float pre_x, float pre_y, float angle, float scale, float * pos_x, float * pos_y){
+    float angle2, dist2;
     calcUIPos2(pre_x, pre_y, angle, scale, pos_x, pos_y, &angle2, &dist2);
 }
 void drawBase(){
@@ -1038,38 +1037,38 @@ void drawBase(){
     //TFT_drawArc((dispWin.x2-dispWin.x1)/2.0, (dispWin.y2-dispWin.y1)/2.0, gDispRadius, 50, 320, 50, TFT_WHITE, TFT_WHITE);
     //TFT_drawArc(x, y, gDispRadius, th, start, end, gBaseColor1, gBaseColor1);
     //printf("x=%d, y=%d, radius=%f\n", x, y, gDispRadius);
-    double posx1, posy1, posx2, posy2;
+    float posx1, posy1, posx2, posy2;
 #if 1
     int backAngle= 360 - gAngle;
     int backPreAngle = 360 - gPreAngle;
 
     //drow axis
     //x axis
-    calcUIPos(RADAR_MAX_DIST, 0, backAngle, gScale, &posx1, &posy1);
-    calcUIPos(-1.0*RADAR_MAX_DIST, 0, backAngle, gScale, &posx2, &posy2);
-    TFT_drawLine(posx1,posy1,posx2,posy2,gBaseColor1);
     if(gPreAngle!=gAngle){
         calcUIPos(RADAR_MAX_DIST, 0, backPreAngle, gScale, &posx1, &posy1);
         calcUIPos(-1.0*RADAR_MAX_DIST, 0, backPreAngle, gScale, &posx2, &posy2);
         TFT_drawLine(posx1,posy1,posx2,posy2,TFT_BLACK);
     }
-
-    //y axis
-    calcUIPos(0, RADAR_MAX_DIST, backAngle, gScale, &posx1, &posy1);
-    calcUIPos(0, -1.0*RADAR_MAX_DIST, backAngle, 1, &posx2, &posy2);
+    calcUIPos(RADAR_MAX_DIST, 0, backAngle, gScale, &posx1, &posy1);
+    calcUIPos(-1.0*RADAR_MAX_DIST, 0, backAngle, gScale, &posx2, &posy2);
     TFT_drawLine(posx1,posy1,posx2,posy2,gBaseColor1);
 
+    //y axis
     if(gPreAngle!=gAngle){
         calcUIPos(0, RADAR_MAX_DIST, backPreAngle, gScale, &posx1, &posy1);
         calcUIPos(0, -1.0*RADAR_MAX_DIST, backPreAngle, 1, &posx2, &posy2);
         TFT_drawLine(posx1,posy1,posx2,posy2,TFT_BLACK);
     }
+    calcUIPos(0, RADAR_MAX_DIST, backAngle, gScale, &posx1, &posy1);
+    calcUIPos(0, -1.0*RADAR_MAX_DIST, backAngle, 1, &posx2, &posy2);
+    TFT_drawLine(posx1,posy1,posx2,posy2,gBaseColor1);
+
 
     //arrow
     //int fwidth, fheight;
     //TFT_getfontsize(&fwidth, &fheight);
     //printf("fwidth=%d, fheight=%d\n",fwidth, fheight);
-    double angle2, dist2;
+    float angle2, dist2;
     if(gPreAngle!=gAngle){
         int backPreAngle= 360 - gPreAngle;
         calcUIPos2(0, 100, backPreAngle, 1.0, &posx1, &posy1, &angle2, &dist2);
@@ -1111,8 +1110,8 @@ void drawBase(){
     //sprintf(buf,"100 %3.1f\n", gScale);
     //TFT_print(buf, (dispWin.x2-dispWin.x1)/2.0, posx1);
 
-    double currentMax = gScale*RADAR_MAX_DIST;
-    double scale;
+    float currentMax = gScale*RADAR_MAX_DIST;
+    float scale;
     int digits = log10(currentMax);
     int cnt;
     for(i=digits, cnt=0; i>0&&cnt<3; i--, cnt++){
@@ -1269,16 +1268,34 @@ void app_main()
 
     int rawX, rawY;
     while (1) {
-#if 0
+#if 1
         printf("cnt: %d\n", cnt++);
-        //vTaskDelay(5000 / portTICK_RATE_MS);
-        ble_indicate(cnt);
+        vTaskDelay(5000 / portTICK_RATE_MS);
+ //       ble_indicate(cnt);
 
         uint16_t length = 0;
         const uint8_t *prf_char;
         // esp_ble_gatts_get_attr_value(42, 6, (uint8_t*)value);
         esp_ble_gatts_get_attr_value(42,  &length, &prf_char);
-        esp_ble_gatts_set_attr_value(45,  length, prf_char);
+
+        //if(length==4){
+        unsigned char buf[4];
+        memcpy(buf, prf_char, 4);
+        /*buf[0] = 123;
+        buf[1] = 49;
+        buf[2] = 18;
+        buf[3] =66;*/
+       /* buf[0] = 0x7b;
+        buf[1] = 0x31;
+        buf[2] = 0x12;
+        buf[3] =0x42;*/
+
+        float *gLati = (float*)buf;
+        //double gLong = *(prf_char+4);
+        printf("gLati=%f\n", *gLati);
+        //}
+
+        //esp_ble_gatts_set_attr_value(45,  length, prf_char);
 
         ESP_LOGI(GATTS_TABLE_TAG, "the gatts demo char length = %x\n", length);
         for(int i = 0; i < length; i++){
@@ -1286,6 +1303,9 @@ void app_main()
         }
         ESP_LOGI(GATTS_TABLE_TAG, "\n");
 #endif
+
+//comasp
+#if 0
         mpu9250_mag_update(&mpu9250_data);
         printf("originValues:%03d %03d %03d  magValues: %03d %03d %03d\n",
         mpu9250_mag_get(&mpu9250_data, 1, 0),
@@ -1326,10 +1346,12 @@ void app_main()
         if(gAngle>360) gAngle-=360.0;
 
         printf("compasX=%f, compasY=%f, gAngle=%f\n", compasX, compasY, gAngle);
+#endif
+//---> compas
 
-        drawBase();
-                          //arc_demo();
-    }
+
+//        drawBase();
+}
 
 
 

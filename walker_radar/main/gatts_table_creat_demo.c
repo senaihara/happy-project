@@ -184,8 +184,12 @@ static uint8_t heart_rate_service_uuid2[2] = {
 static uint8_t cur_pos_uuid[2] = {0x33, 0x2a};
 static uint8_t map_obj_uuid[2] = {0x34, 0x2a};
 
-static const uint8_t cur_pos_val[8] ={0x00,0x00, 0x00,0x00, 0x00,0x00, 0x00,0x00,};
-static const uint8_t map_obj_val[8] ={0x00,0x00, 0x00,0x00, 0x00,0x00, 0x00,0x00,};
+static const uint8_t cur_pos_val[9] ={0x00, 0x00,0x00, 0x00,0x00, 0x00,0x00, 0x00,0x00,};
+static const uint8_t map_obj_val[16] ={0x00,0x00, 0x00,0x00, 0x00,0x00, 0x00,0x00,0x00,0x00, 0x00,0x00, 0x00,0x00, 0x00,0x00};
+
+#define HANDLE_CUR_POS 42
+#define HANDLE_MAP_OBJ 44
+
 
 /// Full HRS Database Description - Used to add attributes into the database
 static const esp_gatts_attr_db_t heart_rate_gatt_db[HRS_IDX_NB] =
@@ -220,13 +224,13 @@ static const esp_gatts_attr_db_t heart_rate_gatt_db[HRS_IDX_NB] =
     // Map Object Char
     [HRS_IDX_MAP_OBJ_CHAR]  =
     {{ESP_GATT_AUTO_RSP}, {ESP_UUID_LEN_16, (uint8_t *)&character_declaration_uuid, ESP_GATT_PERM_READ,
-      CHAR_DECLARATION_SIZE,CHAR_DECLARATION_SIZE, (uint8_t *)&char_prop_read}},
+      CHAR_DECLARATION_SIZE,CHAR_DECLARATION_SIZE, (uint8_t *)&char_prop_read_write}},
 
     // Map Object Val
     [HRS_IDX_MAP_OBJ_VAL]   =
-    {{ESP_GATT_AUTO_RSP}, {ESP_UUID_LEN_16, (uint8_t *)&map_obj_uuid, ESP_GATT_PERM_READ,
+    {{ESP_GATT_AUTO_RSP}, {ESP_UUID_LEN_16, (uint8_t *)&map_obj_uuid, ESP_GATT_PERM_WRITE|ESP_GATT_PERM_READ,
      // sizeof(uint8_t), sizeof(body_sensor_loc_val), (uint8_t *)body_sensor_loc_val}},
-            sizeof(map_obj_val),sizeof(cur_pos_val), (uint8_t *)map_obj_val}},
+            sizeof(map_obj_val),sizeof(map_obj_val), (uint8_t *)map_obj_val}},
 
     // Heart Rate Control Point Characteristic Declaration
     [HRS_IDX_HR_CTNL_PT_CHAR]          = 
@@ -308,6 +312,18 @@ gDispRadius=0;
 #define MEDIAN_BUFFER_LEN 3
 #define MEAN_BUFFER_LEN 5
 
+typedef struct {
+    int id;
+    float posLati;
+    float posLong;
+    float angle;
+    int type;
+    int status;
+    int enableFg;
+    int viewFg;
+} t_objInfo;
+
+t_objInfo gMyObj;
 
 static void gap_event_handler(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param_t *param)
 {
@@ -357,6 +373,17 @@ static void gatts_profile_event_handler(esp_gatts_cb_event_t event,
     	                    param->write.handle);
     	    ESP_LOGI(GATTS_TABLE_TAG, "GATT_WRITE_EVT, value len %d, value %08x\n",
     	                    param->write.len, *(uint32_t *) param->write.value);
+    	    //Get Map Obj
+    	    if(param->write.handle==HANDLE_MAP_OBJ){
+    	        uint16_t length = 0;
+    	        uint8_t *p;
+    	        //get current pos
+    	        esp_ble_gatts_get_attr_value(HANDLE_MAP_OBJ,  &length, &p);
+    	        for(int i = 0; i < length; i++){
+    	            printf("prf_char[%x] =%x",i,p[i]);
+    	        }
+    	        printf("\n");
+    	    }
       	 	break;
     	case ESP_GATTS_EXEC_WRITE_EVT:
 		break;
@@ -1274,32 +1301,25 @@ void app_main()
  //       ble_indicate(cnt);
 
         uint16_t length = 0;
-        const uint8_t *prf_char;
-        // esp_ble_gatts_get_attr_value(42, 6, (uint8_t*)value);
-        esp_ble_gatts_get_attr_value(42,  &length, &prf_char);
-
-        if(length==8){
-        unsigned char latBuf[4], longBuf[4];
-        memcpy(latBuf, prf_char, 4);
-        /*buf[0] = 123;
-        buf[1] = 49;
-        buf[2] = 18;
-        buf[3] =66;*/
-       /* buf[0] = 0x7b;
-        buf[1] = 0x31;
-        buf[2] = 0x12;
-        buf[3] =0x42;*/
-        float *gLati = (float*)latBuf;
-        memcpy(longBuf, prf_char+4, 4);
-        float *gLong = (float*)longBuf;
-        printf("gLati=%f gLong=%f\n", *gLati, *gLong);
+        uint8_t *p;
+        //get current pos
+        esp_ble_gatts_get_attr_value(42,  &length, &p);
+        if(length==9 && *p==1){
+            unsigned char latBuf[4], longBuf[4];
+            memcpy(latBuf, p+1, 4);
+            memcpy(longBuf, p+5, 4);
+            gMyObj.posLati = *((float*)latBuf);
+            gMyObj.posLong = *((float*)longBuf);
+            printf("gLati=%f gLong=%f\n", gMyObj.posLati, gMyObj.posLong);
         }
+
+        //get object info
 
         //esp_ble_gatts_set_attr_value(45,  length, prf_char);
 
         ESP_LOGI(GATTS_TABLE_TAG, "the gatts demo char length = %x\n", length);
         for(int i = 0; i < length; i++){
-            ESP_LOGI(GATTS_TABLE_TAG, "prf_char[%x] =%x",i,prf_char[i]);
+            ESP_LOGI(GATTS_TABLE_TAG, "prf_char[%x] =%x",i,p[i]);
         }
         ESP_LOGI(GATTS_TABLE_TAG, "\n");
 #endif

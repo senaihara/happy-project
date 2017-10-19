@@ -210,52 +210,52 @@
                                             })
    
 	//自分の座標位置の更新                          
-    $('#update_pos').click(function(){
-        //   let resetEnergyExpended = new Uint8Array([1]);
-         
-        var f1 = new Float32Array(1);
-        f1[0] = gLati;
-        log(gLati+" "+f1[0])  
-         var arrayLati = new Int8Array(f1.buffer)
-      
-        var f2 = new Float32Array(1);
-        f2[0] = gLong;
-        var tmpArray = []
-        log(gLong+" "+f2[0])
-        var arrayLong = new Int8Array(f2.buffer);
-        	     
-       	var sendBuf = new Int8Array(9);
-       	sendBuf[0] = gMyId;
-       	sendBuf[1] = arrayLati[0];
-       	sendBuf[2] = arrayLati[1];
-       	sendBuf[3] = arrayLati[2];
-       	sendBuf[4] = arrayLati[3];
-       	sendBuf[5] = arrayLong[0];
-       	sendBuf[6] = arrayLong[1];
-       	sendBuf[7] = arrayLong[2];
-       	sendBuf[8] = arrayLong[3];
-       	
-        gCharaCurPos.writeValue(sendBuf);
-        
-   return;
-        //gCharacteristic.writeValue(resetEnergyExpended);
-   
-        
-        log("array length="+array.length);
-        for(var i =0; i<array.length; i++){
-            log(array[i]);
-        }
-        var buffer = new ArrayBuffer(8);
-        for(var i =0; i<array.length; i++){
-            buffer[i] = 1;
-        }
-        var dataview = new DataView(buffer);
-        for(var i =0; i<array.length; i++){
-            dataview.setUint8(i, array[i]);
-        }
-        
-        log("convert pos="+dataview.getFloat64(0));
-        //gDevice.gatt.disconnect()
+        $('#update_pos').click(function(){
+            //   let resetEnergyExpended = new Uint8Array([1]);
+             
+            var f1 = new Float32Array(1);
+            f1[0] = gLati;
+            log(gLati+" "+f1[0])  
+             var arrayLati = new Int8Array(f1.buffer)
+          
+            var f2 = new Float32Array(1);
+            f2[0] = gLong;
+            var tmpArray = []
+            log(gLong+" "+f2[0])
+            var arrayLong = new Int8Array(f2.buffer);
+            	     
+           	var sendBuf = new Int8Array(9);
+           	sendBuf[0] = gMyId;
+           	sendBuf[1] = arrayLati[0];
+           	sendBuf[2] = arrayLati[1];
+           	sendBuf[3] = arrayLati[2];
+           	sendBuf[4] = arrayLati[3];
+           	sendBuf[5] = arrayLong[0];
+           	sendBuf[6] = arrayLong[1];
+           	sendBuf[7] = arrayLong[2];
+           	sendBuf[8] = arrayLong[3];
+           	
+            gCharaCurPos.writeValue(sendBuf);
+            
+       return;
+            //gCharacteristic.writeValue(resetEnergyExpended);
+       
+            
+            log("array length="+array.length);
+            for(var i =0; i<array.length; i++){
+                log(array[i]);
+            }
+            var buffer = new ArrayBuffer(8);
+            for(var i =0; i<array.length; i++){
+                buffer[i] = 1;
+            }
+            var dataview = new DataView(buffer);
+            for(var i =0; i<array.length; i++){
+                dataview.setUint8(i, array[i]);
+            }
+            
+            log("convert pos="+dataview.getFloat64(0));
+            //gDevice.gatt.disconnect()
         })
 
         //オブジェクトの追加                          
@@ -314,14 +314,50 @@
   
     function handleNotifications(event) {
         let value = event.target.value;
+        /*
+        typedef struct {
+        int id;
+        float posLati;
+        float posLong;
+        float angle;
+        int type;
+        int owner;
+        int status;
+        int enableFg;
+        int viewFg;
+        } t_objInfo;*/
         let a = [];
         // Convert raw data bytes to hex values just for the sake of showing something.
         // In the "real" world, you'd use data.getUint8, data.getUint16 or even
         // TextDecoder to process raw data bytes.
         for (let i = 0; i < value.byteLength; i++) {
-            a.push('0x' + ('00' + value.getUint8(i).toString(16)).slice(-2));
+            //a.push('0x' + ('00' + value.getUint8(i).toString(16)).slice(-2));
+            a.push(value.getUint8(i).toString(16));
         }
         log('> notify ' + a.join(' '));
+        
+        var buffer = new ArrayBuffer(4);
+        
+        var dataView = new DataView(buffer);
+        dataView.setUint8(0, parseInt(value.getUint8(4).toString(16),16));
+        dataView.setUint8(1, parseInt(value.getUint8(5).toString(16),16));
+        dataView.setUint8(2, parseInt(value.getUint8(6).toString(16),16));
+        dataView.setUint8(3, parseInt(value.getUint8(7).toString(16),16));
+        var putObjLati = dataView.getFloat32(0, true);
+        
+        dataView.setUint8(0, parseInt(value.getUint8(8).toString(16),16));
+        dataView.setUint8(1, parseInt(value.getUint8(9).toString(16),16));
+        dataView.setUint8(2, parseInt(value.getUint8(10).toString(16),16));
+        dataView.setUint8(3, parseInt(value.getUint8(11).toString(16),16));
+        var putObjLong = dataView.getFloat32(0, true);
+        
+        dataView.setUint8(0, parseInt(value.getUint8(12).toString(16),16));
+        dataView.setUint8(1, parseInt(value.getUint8(13).toString(16),16));
+        var putAngle = dataView.getInt16(0, true);
+          
+        log("covert pos lati="+putObjLati+" long="+putObjLong+ " angle="+putAngle);
+         
+        
     }
   
   function doubleToByteArray(number) {

@@ -335,12 +335,12 @@ typedef struct {
     int id;
     float posLati;
     float posLong;
-    float angle;
-    int type;
-    int owner;
-    int status;
-    int enableFg;
-    int viewFg;
+    short angle;
+    char type;
+    char owner;
+    char status;
+    char enableFg;
+    char viewFg;
 } t_objInfo;
 
 t_objInfo gMyObj;
@@ -401,10 +401,12 @@ static void gatts_profile_event_handler(esp_gatts_cb_event_t event,
     	    if(param->write.handle==HANDLE_CUR_POS){
     	        esp_ble_gatts_get_attr_value(HANDLE_CUR_POS,  &length, &p);
             unsigned char latBuf[4], longBuf[4];
+            gMyObj.id = *p;
             memcpy(latBuf, p+1, 4);
             memcpy(longBuf, p+5, 4);
             gMyObj.posLati = *((float*)latBuf);
             gMyObj.posLong = *((float*)longBuf);
+            printf("curpos lat=%x %x %x %x\n", *(p+1), *(p+2), *(p+3), *(p+4));
             printf("updated myObj gLati=%f gLong=%f\n", gMyObj.posLati, gMyObj.posLong);
         }
 
@@ -427,7 +429,7 @@ static void gatts_profile_event_handler(esp_gatts_cb_event_t event,
             tmpObj.enableFg = *(p+14);
             tmpObj.viewFg = *(p+15);
 
-            printf("updated mapObj id=%d lati=%f long=%f angle=%f type=%d owner=%d status=%d enableFg=%d viewFg=%d\n",
+            printf("updated mapObj id=%d lati=%f long=%f angle=%d type=%d owner=%d status=%d enableFg=%d viewFg=%d\n",
                     tmpObj.id, tmpObj.posLati, tmpObj.posLong, tmpObj.angle, tmpObj.type, tmpObj.owner, tmpObj.status, tmpObj.enableFg, tmpObj.viewFg);
         }
       	 	break;
@@ -1387,9 +1389,15 @@ void app_main()
         printf("cnt: %d\n", cnt++);
         vTaskDelay(5000 / portTICK_RATE_MS);
  //       ble_indicate2(cnt);
-        printf("sizeof objInfo=%d\n", sizeof(t_objInfo));
-        memcpy(&gPutObj, &gMapObj, sizeof(t_objInfo));
+        printf("sizeof objInfo=%d\n", sizeof(gMapObj));
+        memcpy(&gPutObj, &gMapObj, sizeof(gMapObj));
+        //gPutObj = gMapObj;
+        gPutObj.posLati = gMyObj.posLati;
+        gPutObj.posLong = gMyObj.posLong;
+        gPutObj.angle = 300;
 
+        printf("gMyObj  gLati=%f gLong=%f\n", gMyObj.posLati, gMyObj.posLong);
+        printf("gPutObj  gLati=%f gLong=%f\n", gPutObj.posLati, gPutObj.posLong);
        notifyPutObject();
 
 #endif

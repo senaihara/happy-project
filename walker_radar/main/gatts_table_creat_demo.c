@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/event_groups.h"
@@ -35,6 +34,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
 #include "esp_system.h"
 #include "driver/gpio.h"
 //#include "esp_heap_alloc_caps.h"
@@ -51,7 +51,7 @@
 
 //application
 #include <math.h>
-
+#include "utility.h"
 
 #define GATTS_TABLE_TAG "GATTS_TABLE_DEMO"
 
@@ -331,6 +331,7 @@ gDispRadius=0;
 #define MEDIAN_BUFFER_LEN 3
 #define MEAN_BUFFER_LEN 5
 
+/*
 typedef struct {
     int id;
     float posLati;
@@ -342,10 +343,13 @@ typedef struct {
     char enableFg;
     char viewFg;
 } t_objInfo;
-
+*/
 t_objInfo gMyObj;
 t_objInfo gMapObj;
 t_objInfo gPutObj;
+t_cell gObjList;
+
+//vector <t_objInfo> gMapObjList;
 
 static void gap_event_handler(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param_t *param)
 {
@@ -1370,8 +1374,7 @@ void app_main()
     //init compass
     mpu9250_mag_begin(&mpu9250_data);
 
-
-    int cnt = 0;
+    int cnt=0;
     float compasX, compasY;
     static int medianBufferX[MEDIAN_BUFFER_LEN];
     static int medianBufferIndexX=0;
@@ -1384,6 +1387,17 @@ void app_main()
     static int meanBufferIndexY=0;
 
     int rawX, rawY;
+
+        vTaskDelay(5000 / portTICK_RATE_MS);
+ //       ble_indicate2(cnt);
+        objListTest();
+
+
+
+
+
+
+
     while (1) {
 #if 1
         printf("cnt: %d\n", cnt++);

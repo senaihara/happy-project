@@ -7,6 +7,7 @@ typedef struct {
     int id;
     float posLati;
     float posLong;
+    float posAlt;
     short angle;
     char type;
     char owner;

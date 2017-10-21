@@ -11,27 +11,36 @@
     var gCharaCurPos = {};
     var gCharaMapObj = {};
     var gCharaPutObj = {};
-    var gDevice = {};
+    var gDevice = null;
     var gService = {};
     var gLati;
     var gLong; 
     var gMyId = 1;    
-    
+    var gAngle = 0;
+    var gAlt = 0;
+    var gGattModeFg=0;
+     
     function initMap() {             // google maps Javascript と同期
         if (navigator.geolocation) {   // 現在の位置情報を取得する
-          navigator.geolocation.getCurrentPosition(successCallback, errorCallback,option);
-          //navigator.geolocation.getCurrentPosition(successCallback, errorCallback,{enableHighAccuracy: true});
+          //navigator.geolocation.getCurrentPosition(successCallback, errorCallback,option);
+          navigator.geolocation.getCurrentPosition(successCallback, errorCallback,
+            {                 // 位置取得オプション
+            "enableHighAccuracy":true,
+            "timeout":8000,
+            "maximumAge":60000,
+            });
         } else {
           alert('navigator.geolocation は利用出来ません');
         }  
-      }; //  initMap()  --------------
+    }; //  initMap()  --------------
       
       // 現在の位置情報を取得時の処置  ------------------
-      function successCallback(position) {
+    function successCallback(position) {
         var lati = position.coords.latitude.toFixed(5);
         var long = position.coords.longitude.toFixed(5);
         gLati = position.coords.latitude.toFixed(5);
         gLong = position.coords.longitude.toFixed(5);
+        gAlt = position.coords.altitude;
         
         var g_txt = "緯度：" + gLati + "<br>";
         g_txt += "経度：" + gLong + "<br>";  
@@ -48,7 +57,7 @@
       }; //  successCallback(position) ---------------
  
       // 位置情報が取得できない場合の処置 ---------------
-      function errorCallback(error) {
+    function errorCallback(error) {
         var err_msg = "";
         switch(error.code){
           case 0:
@@ -66,48 +75,22 @@
         }
         document.getElementById("txt_result").innerHTML = err_msg;
       }; //  errorCallback(error) ----------------------
-      
-      var option =  {                 // 位置取得オプション
-            "enableHighAccuracy":true,
-            "timeout":8000,
-            "maximumAge":60000,
-          }
 
     $(function() {
-	   $('#button').click(function(){
-		//alert('auau');
-                       $.getJSON('http://160.16.116.250/api/search.php',
-                                 {
-                                 zipcode: 1
-                                 }
-                                 )
-                       // 結果を取得したら…
-                       .done(function(data) {
-                             // 中身が空でなければ、その値を［住所］欄に反映
-                             
-                             //if (data.results) {
-                             alert('getdata')
-                             //var result = data.results[0];
-                             
-                             ulObj = $("#output"),
-                             len = data.length;
-                             
-                             for(var i = 0; i < len; i++) {
-                             ulObj.append($("<li>").attr({"id":data[i].id}).text(data[i].name));
-                             }
-                             //$('#address').val(result.address1 + result.address2 + result.address3);
-                             // 中身が空の場合は、エラーメッセージを反映
-                             
-                             });
-                       
-		// $.getJSON("http://160.16.116.250/api/search.php", function(data){
-        //for(var i in data){
-       // $("#output").append("<li><strong>" + data[i].id + "</strong></li>");
-   //    alert('auau')
-  //  }
+        //初期設定
+        setInterval(function(){
+            if(gGattModeFg%2==0){
+                log("updatePos")
+                updateCurPos();
+            }else{
+                log("getRadarAngle")
+                getRadarAngle();
+            } 
+           gGattModeFg++;
+        },5000);
         
-        });
-
+              
+            
         $('#ble_connect').click(function(){
            //alert('connect')
             const SERVICE_UUID =0x0d18;
@@ -211,51 +194,7 @@
    
 	//自分の座標位置の更新                          
         $('#update_pos').click(function(){
-            //   let resetEnergyExpended = new Uint8Array([1]);
-             
-            var f1 = new Float32Array(1);
-            f1[0] = gLati;
-            log(gLati+" "+f1[0])  
-             var arrayLati = new Int8Array(f1.buffer)
-          
-            var f2 = new Float32Array(1);
-            f2[0] = gLong;
-            var tmpArray = []
-            log(gLong+" "+f2[0])
-            var arrayLong = new Int8Array(f2.buffer);
-            	     
-           	var sendBuf = new Int8Array(9);
-           	sendBuf[0] = gMyId;
-           	sendBuf[1] = arrayLati[0];
-           	sendBuf[2] = arrayLati[1];
-           	sendBuf[3] = arrayLati[2];
-           	sendBuf[4] = arrayLati[3];
-           	sendBuf[5] = arrayLong[0];
-           	sendBuf[6] = arrayLong[1];
-           	sendBuf[7] = arrayLong[2];
-           	sendBuf[8] = arrayLong[3];
-           	
-            gCharaCurPos.writeValue(sendBuf);
-            
-       return;
-            //gCharacteristic.writeValue(resetEnergyExpended);
-       
-            
-            log("array length="+array.length);
-            for(var i =0; i<array.length; i++){
-                log(array[i]);
-            }
-            var buffer = new ArrayBuffer(8);
-            for(var i =0; i<array.length; i++){
-                buffer[i] = 1;
-            }
-            var dataview = new DataView(buffer);
-            for(var i =0; i<array.length; i++){
-                dataview.setUint8(i, array[i]);
-            }
-            
-            log("convert pos="+dataview.getFloat64(0));
-            //gDevice.gatt.disconnect()
+            updateCurPos();
         })
 
         //オブジェクトの追加                          
@@ -293,25 +232,132 @@
             sendBuf[15] = 5;//viewFg
             
             log("update obj sendBuf "+sendBuf);
-            gCharaMapObj.writeValue(sendBuf);
+            gCharaMapObj.writeValue(sendBuf).then(_ => {
+            });
             
             return;
         })
   
-                                            
-                                            
-  $('#ble_disconnect').click(function(){
-                            alert('disconnect')
-                       gDevice.gatt.disconnect()
-                       
-                       })
-  
+        $('#ble_disconnect').click(function(){
+            alert('disconnect')
+            gDevice.gatt.disconnect()
+            gDevice = null;
+        })
 
-  
-  
-  
-  });
-  
+        $('#test').click(function(){
+            updateCurPos();
+            return;
+        }) 
+    });
+    //jQuery end
+    
+    //Radarへの現在位置の更新
+    function updateCurPos2Radar(){
+        if(gDevice==null || gCharaCurPos == null){
+            log("gDevice or gCharaCurPos = null");
+            return;
+        }
+       /* 
+        //先に角度を取得する
+        gCharaCurPos.readValue()
+        .then((val) => {
+            var buffer = new ArrayBuffer(2);
+            var dataView = new DataView(buffer);
+            dataView.setUint8(0, parseInt(val.getUint8(9).toString(16),16));
+            dataView.setUint8(1, parseInt(val.getUint8(10).toString(16),16));
+            gAngle = dataView.getUint16(0, true);
+            log("gAngle="+gAngle);
+        })
+        */
+
+        
+        var f1 = new Float32Array(1);
+        f1[0] = gLati;
+        log(gLati+" "+f1[0])  
+        var arrayLati = new Int8Array(f1.buffer)
+      
+        var f2 = new Float32Array(1);
+        f2[0] = gLong;
+        var tmpArray = []
+        log(gLong+" "+f2[0])
+        var arrayLong = new Int8Array(f2.buffer);
+                 
+        var sendBuf = new Int8Array(9);
+        sendBuf[0] = gMyId;
+        sendBuf[1] = arrayLati[0];
+        sendBuf[2] = arrayLati[1];
+        sendBuf[3] = arrayLati[2];
+        sendBuf[4] = arrayLati[3];
+        sendBuf[5] = arrayLong[0];
+        sendBuf[6] = arrayLong[1];
+        sendBuf[7] = arrayLong[2];
+        sendBuf[8] = arrayLong[3];
+        
+        gCharaCurPos.writeValue(sendBuf)
+        .then(_ => {
+        });
+
+         
+    }
+    
+    function getRadarAngle(){
+        if(gDevice==null || gCharaCurPos == null){
+            log("gDevice or gCharaCurPos = null");
+            return;
+        }
+        gCharaCurPos.readValue()
+        .then((val) => {
+            var buffer = new ArrayBuffer(2);
+            var dataView = new DataView(buffer);
+            dataView.setUint8(0, parseInt(val.getUint8(9).toString(16),16));
+            dataView.setUint8(1, parseInt(val.getUint8(10).toString(16),16));
+            gAngle = dataView.getUint16(0, true);
+            log("gAngle="+gAngle);
+        })
+
+    }
+    
+    function updateCurPos(){ 
+        if (navigator.geolocation) {   // 現在の位置情報を取得する
+            navigator.geolocation.getCurrentPosition(
+            function(position){
+                gMyId = 1;
+                //gMyId = $('#myId').val();
+                gLati = position.coords.latitude.toFixed(5);
+                gLong = position.coords.longitude.toFixed(5);
+                gAlt = position.coords.altitude;
+                if(gAlt==null){
+                    gAlt=0;
+                }
+                
+                //Radarへの現在位置の更新
+                updateCurPos2Radar();
+                
+                //サーバへの現在位置の更新 
+                $.getJSON('https://160.16.116.250/walker/api/update_cur_pos.php',
+                {id:gMyId, pos_lat:gLati, pos_long:gLong, pos_alt:gAlt, pos_angle:gAngle })
+                .done(function(data) {
+                    //alert('getdata')
+                    var len = data.length;
+                    log("len="+len);
+                    for(var i = 0; i < len; i++) {
+                        log("get data="+data[i].result);
+                    }
+                });  
+            },
+            function(error){
+                log("exec update_cur_pos.php error="+error.code);
+            },
+            //option
+            {"enableHighAccuracy":true, "timeout":8000, "maximumAge":60000, }
+            );  
+        } else {
+          alert('navigator.geolocation は利用出来ません');
+          return;
+        } 
+              
+    }
+     
     function handleNotifications(event) {
         let value = event.target.value;
         /*
@@ -360,24 +406,23 @@
         
     }
   
-  function doubleToByteArray(number) {
-    var buffer = new ArrayBuffer(8);         // JS numbers are 8 bytes long, or 64 bits
-    var longNum = new Float64Array(buffer);  // so equivalent to Float64
+    function doubleToByteArray(number) {
+        var buffer = new ArrayBuffer(8);         // JS numbers are 8 bytes long, or 64 bits
+      var longNum = new Float64Array(buffer);  // so equivalent to Float64
 
-    longNum[0] = number;
-
-    return Array.from(new Uint8Array(buffer)).reverse();  // reverse to get little endian
-}
-  
-  window.onload = function (){
-    //alert('aa')
-    const CANDLE_SERVICE_UUID = 0x00FF;
+        longNum[0] = number;
     
+        return Array.from(new Uint8Array(buffer)).reverse();  // reverse to get little endian
+    }
+  
+    window.onload = function (){
+    const CANDLE_SERVICE_UUID = 0x00FF;
     
     class PlaybulbCandle {
       constructor() {
         this.device = null;
       }
+      
       connect() {
         alert('bb')
         let options = {filters:[{services:[ CANDLE_SERVICE_UUID ]}]};
@@ -388,9 +433,7 @@
       }
     }
     window.playbulbCandle = new PlaybulbCandle();
-    //window.playbulbCandle.connect();
-
-    
+    //window.playbulbCandle.connect();  
   }
   
   </script>
@@ -442,33 +485,50 @@
   </style>
 </head>
 <body>
-  <div id="gmap">ここに地図</div>
-<h4>　【現在位置】</h4>
-  <div id="txt_result">ここに位置情報</div><br>
-<input type="button" id="button" value="Exec"/><br />
-  <div id="output"></div>
+    <div id="gmap">ここに地図</div>
+    <h4>　【現在位置】</h4>
+    <div id="txt_result">ここに位置情報</div><br>
+    
+    
+    <input type="button" id="test" value="test exec"/><br />
+   
+    <!-- 
+    <select name="myId" id="myId">
+        <option value="1">1</option>
+        <option value="1">2</option>
+    </select>
+    -->
+    
+    <datalist id="myIds">
+        <option value="1">11</option>
+        <option value="2">2</option>
+    </datalist>
+    
+    <input id="myId" type="text" list="myIds" autofocus placeholder="My ID">
+    
     <input type="button" id="ble_connect" value="ble connect"/><br/>
     <input type="button" id="ble_read_test" value="ble read test"/><br/>
     <input type="button" id="ble_write_test" value="ble write test"/><br/>
     <input type="button" id="update_pos" value="update pos"/><br/>
     <input type="button" id="update_obj" value="update obj"/><br/>
-     <input type="button" id="ble_disconnect" value="ble disconnect"/><br/>
-  <form>
-    <input id="service" type="text" list="services" autofocus placeholder="Bluetooth Service">
-      <input id="characteristic" type="text" list="characteristics" placeholder="Bluetooth Characteristic">
+    <input type="button" id="ble_disconnect" value="ble disconnect"/><br/>
+   
+    <form>
+        <input id="service" type="text" list="services" autofocus placeholder="Bluetooth Service">
+        <input id="characteristic" type="text" list="characteristics" placeholder="Bluetooth Characteristic">
         <input type="button" id="ble_getchar" value="ble getchar"/><br/>
         <!--<button>Get Bluetooth characteristic properties</button>-->
-  </form>
+    </form>
   
-  <datalist id="services">
-    <option value="alert_notification">alert_notification</option>
-  </datalist>
+    <datalist id="services">
+        <option value="alert_notification">alert_notification</option>
+     </datalist>
    
-  <datalist id="characteristics">
-    <option value="aerobic_heart_rate_lower_limit">aerobic_heart_rate_lower_limit</option>
-    <option value="weight_scale_feature">weight_scale_feature</option>
-    <option value="wind_chill">wind_chill</option>
-  </datalist>
+    <datalist id="characteristics">
+        <option value="aerobic_heart_rate_lower_limit">aerobic_heart_rate_lower_limit</option>
+        <option value="weight_scale_feature">weight_scale_feature</option>
+        <option value="wind_chill">wind_chill</option>
+    </datalist>
   
   <h3>Live Output</h3>
   <div id="output" class="output">

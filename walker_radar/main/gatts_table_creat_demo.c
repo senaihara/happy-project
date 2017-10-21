@@ -181,7 +181,7 @@ static uint8_t cur_pos_uuid[2] = {0x33, 0x2a};
 static uint8_t map_obj_uuid[2] = {0x34, 0x2a};
 static uint8_t put_obj_uuid[2] = {0x35, 0x2a};
 
-static const uint8_t cur_pos_val[9] ={0x00, 0x00, 0x00,0x00, 0x00,0x00, 0x00,0x00, 0x00};
+static const uint8_t cur_pos_val[11] ={0x00, 0x00, 0x00,0x00, 0x00,0x00, 0x00,0x00, 0x00, 0x00, 0x00};
 static const uint8_t map_obj_val[16] ={0x00,0x00, 0x00,0x00, 0x00,0x00, 0x00,0x00,0x00,0x00, 0x00,0x00, 0x00,0x00, 0x00,0x00};
 //static const uint8_t put_obj_val[10] ={0x00,0x00, 0x00,0x00, 0x00,0x00, 0x00,0x00,0x00,0x00};
 static const uint8_t put_obj_val[8] ={0x00,0x00, 0x00,0x00, 0x00,0x00, 0x00,0x00};
@@ -435,6 +435,7 @@ static void gatts_profile_event_handler(esp_gatts_cb_event_t event,
 
             printf("updated mapObj id=%d lati=%f long=%f angle=%d type=%d owner=%d status=%d enableFg=%d viewFg=%d\n",
                     tmpObj.id, tmpObj.posLati, tmpObj.posLong, tmpObj.angle, tmpObj.type, tmpObj.owner, tmpObj.status, tmpObj.enableFg, tmpObj.viewFg);
+            updateObjList(&gObjList, tmpObj);
         }
       	 	break;
     	case ESP_GATTS_EXEC_WRITE_EVT:
@@ -1322,8 +1323,6 @@ int smoothByMeanfilter(int *buffer, int len) {
 }
 
 
-
-
 void app_main()
 {
     esp_err_t ret;
@@ -1387,32 +1386,45 @@ void app_main()
     static int meanBufferIndexY=0;
 
     int rawX, rawY;
-
-        vTaskDelay(5000 / portTICK_RATE_MS);
- //       ble_indicate2(cnt);
-        objListTest();
-
-
-
-
-
-
-
+    initObjList(&gObjList);
+    gMyObj.angle = 250;
+    //test object
+    //objListTest();
     while (1) {
 #if 1
         printf("cnt: %d\n", cnt++);
         vTaskDelay(5000 / portTICK_RATE_MS);
  //       ble_indicate2(cnt);
         printf("sizeof objInfo=%d\n", sizeof(gMapObj));
-        memcpy(&gPutObj, &gMapObj, sizeof(gMapObj));
-        //gPutObj = gMapObj;
         gPutObj.posLati = gMyObj.posLati;
         gPutObj.posLong = gMyObj.posLong;
         gPutObj.angle = 300;
-
-        printf("gMyObj  gLati=%f gLong=%f\n", gMyObj.posLati, gMyObj.posLong);
+        printf("gMyObj  gLati=%f gLong=%f gAngle=%d\n", gMyObj.posLati, gMyObj.posLong, gMyObj.angle);
         printf("gPutObj  gLati=%f gLong=%f\n", gPutObj.posLati, gPutObj.posLong);
-       notifyPutObject();
+        //notifyPutObject();
+
+        //set angle
+        gMyObj.angle +=3;
+        if(gMyObj.angle > 360){
+            gMyObj.angle = 250;
+        }
+
+        char tmpBuf[11];
+        char *bufP = tmpBuf;
+        memcpy(bufP, (char*)(&gMyObj.id),1);
+        memcpy(bufP+1, (float*)(&gMyObj.posLati),4);
+        memcpy(bufP+5, (float*)(&gMyObj.posLong),4);
+        memcpy(bufP+9, (short*)(&gMyObj.angle),2);
+        esp_ble_gatts_set_attr_value(HANDLE_CUR_POS, sizeof(tmpBuf),(uint8_t *)tmpBuf);
+
+        //check object
+        t_cell *p=&gObjList;
+        cnt=0;
+        while(p->next!=NULL){
+            p=p->next;
+            printf("obj cnt=%d obj id=%d\n", cnt, p->node.id);
+            cnt++;
+        }
 
 #endif
 

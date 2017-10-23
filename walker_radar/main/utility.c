@@ -53,6 +53,8 @@ int addObj2List(t_cell* bp, t_objInfo obj){
         printf("error can't exec\n");
         return(-1);
     }
+    tmp->before = NULL;
+    tmp->next = NULL;
     copyObjData(tmp, obj);
     //printf("exec copyObjData\n");
 
@@ -70,12 +72,16 @@ int addObj2List(t_cell* bp, t_objInfo obj){
 //obj更新するオブジェクト
 int updateObjList(t_cell* bp, t_objInfo obj){
     t_cell *tmp;
+    //printf("getObjPtr\n");
     tmp = getObjPtr(bp, obj);
     //no object then add
     if(tmp==NULL){
+        //printf("updateObjList exec addOjb2List\n");
         return addObj2List(bp, obj);
     }
     //same object update
+    //printf("updateObjList exec copyObjData\n");
+
     copyObjData(tmp, obj);
     return 0;
 }
@@ -113,6 +119,17 @@ void deleteAllObjList(t_cell *bp) {
     bp->next = tmp->next;
     free(tmp);
   }
+}
+
+void printObjList(t_cell *bp){
+    t_cell *tmp=bp;
+    int cnt=0;
+    while (tmp->next != NULL) {
+        tmp = tmp->next;
+        printf("[cnt=%d id=%d] ",cnt, tmp->node.id);
+        cnt++;
+    }
+    printf("\n");
 }
 
 void objListTest(){

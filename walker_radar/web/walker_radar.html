@@ -8,6 +8,26 @@
 <script type="text/javascript" src="https://ajax.googleapis.com/ajax/libs/jquery/1.10.1/jquery.min.js"></script>
 <script src="https://maps.googleapis.com/maps/api/js?callback=initMap" async defer></script>
 <script>
+    //オブジェクトクラス定義
+    class WalkerObj {
+        constructor(id=0, posLat=0, posLong=0, posAlt=0, angle=0, type=0, owner=0, statusFg=0, enableFg=1, viewFg=1, deleteFg=0){
+            this.id = id;
+            this.posLat = posLat;
+            this.posLong = posLong;
+            this.posAlt = posAlt;
+            this.angle = angle;
+            this.owner = owner;
+            this.statusFg = statusFg;
+            this.enableFg = enableFg;
+            this.viewFg = viewFg;
+            this.deleteFg = deleteFg;
+        }
+        
+        print(){
+            log("id="+this.id);
+        }
+    }
+
     var gCharaCurPos = {};
     var gCharaMapObj = {};
     var gCharaPutObj = {};
@@ -19,6 +39,10 @@
     var gAngle = 0;
     var gAlt = 0;
     var gGattModeFg=0;
+    var gMyObj = new WalkerObj();
+    gMyObj.id = 1;
+    var gObjList = new Array();
+    var gCount=1;
      
     function initMap() {             // google maps Javascript と同期
         if (navigator.geolocation) {   // 現在の位置情報を取得する
@@ -77,7 +101,9 @@
       }; //  errorCallback(error) ----------------------
 
     $(function() {
+        //initialize
         //初期設定
+        /* 
         setInterval(function(){
             if(gGattModeFg%2==0){
                 log("updatePos")
@@ -88,9 +114,7 @@
             } 
            gGattModeFg++;
         },5000);
-        
-              
-            
+        */  
         $('#ble_connect').click(function(){
            //alert('connect')
             const SERVICE_UUID =0x0d18;
@@ -121,7 +145,6 @@
                     gCharaMapObj = characteristic;
                     log('> Characteristic UUID:  ' + characteristic.uuid);
                 });
-                
                 
                return service.getCharacteristic(CHARA_UUID_PUT_OBJ).then(characteristic => {
                     gCharaPutObj = characteristic;
@@ -199,6 +222,10 @@
 
         //オブジェクトの追加                          
         $('#update_obj').click(function(){
+        
+            updateObjs();
+            return;
+            
             var f1 = new Float32Array(1);
             f1[0] = gLati;
             var arrayLati = new Int8Array(f1.buffer)
@@ -214,7 +241,8 @@
             //id[1],lat[4],long[4],angle[2],type[1],owner[1],status[1],enableFg[1],viewFg[1]
                      
             var sendBuf = new Int8Array(16);
-            sendBuf[0] = 2;
+            sendBuf[0] = gCount;
+            gCount++;
             sendBuf[1] = arrayLati[0];
             sendBuf[2] = arrayLati[1];
             sendBuf[3] = arrayLati[2];
@@ -245,7 +273,21 @@
         })
 
         $('#test').click(function(){
-            updateCurPos();
+           //updateObjs();
+           //return;
+           
+           /* updateObjs();
+            log("gObjList len="+gObjList.length);
+            for(var i = 0; i< gObjList.length; i++){
+                log("i="+i);
+                gObjList[i].print();
+            }
+            */
+            walkerObj = new WalkerObj();
+            walkerObj.id = gCount;
+            updataObjs2Radar(walkerObj, 100);
+            gCount++;
+            
             return;
         }) 
     });
@@ -270,7 +312,6 @@
         })
         */
 
-        
         var f1 = new Float32Array(1);
         f1[0] = gLati;
         log(gLati+" "+f1[0])  
@@ -314,7 +355,6 @@
             gAngle = dataView.getUint16(0, true);
             log("gAngle="+gAngle);
         })
-
     }
     
     function updateCurPos(){ 
@@ -355,7 +395,88 @@
           alert('navigator.geolocation は利用出来ません');
           return;
         } 
-              
+    }
+    
+    //Radarへのオブジェクトの更新
+    function updataObjs2Radar(walkerObj, retryCount){
+        var f1 = new Float32Array(1);
+        f1[0] = walkerObj.posLat;
+        var arrayLati = new Int8Array(f1.buffer)
+      
+        var f2 = new Float32Array(1);
+        f2[0] = walkerObj.posLong;
+        var arrayLong = new Int8Array(f2.buffer);
+        
+        var d1 = new Int16Array(1);
+        d1[0] = walkerObj.angle;
+        var arrayAngle = new Int8Array(d1.buffer);
+        
+        //id[1],lat[4],long[4],angle[2],type[1],owner[1],status[1],enableFg[1],viewFg[1]
+                 
+        var sendBuf = new Int8Array(16);
+        sendBuf[0] = walkerObj.id;
+        sendBuf[1] = arrayLati[0];
+        sendBuf[2] = arrayLati[1];
+        sendBuf[3] = arrayLati[2];
+        sendBuf[4] = arrayLati[3];
+        sendBuf[5] = arrayLong[0];
+        sendBuf[6] = arrayLong[1];
+        sendBuf[7] = arrayLong[2];
+        sendBuf[8] = arrayLong[3];
+        sendBuf[9] = arrayAngle[0];
+        sendBuf[10] = arrayAngle[1];
+        sendBuf[11] = walkerObj.type;//type
+        sendBuf[12] = walkerObj.owner;//owner
+        sendBuf[13] = walkerObj.statusFg;//status
+        sendBuf[14] = walkerObj.enableFg;//enableFg
+        sendBuf[15] = walkerObj.viewFg;//viewFg
+        
+        log("update obj sendBuf "+sendBuf);
+        return gCharaMapObj.writeValue(sendBuf)
+       .catch(error => {
+            retryCount--;
+            log("retryCount"+retryCount)
+            if (retryCount > 0) {
+                return updataObjs2Radar(walkerObj, retryCount);
+            }
+            log("write error");
+            return Promise.reject(error);
+        });   
+    }
+    
+    //オブジェクトの更新
+    function updateObjs(){
+        //DBからオブジェクトの受信
+        //サーバへの現在位置の更新 
+        $.getJSON('https://160.16.116.250/walker/api/search_objs.php',
+        {id:gMyObj.id})
+        .done(function(data) {
+            //alert('getdata')
+            var len = data.length;
+            log("search_obj.php len="+len);
+            for(var i = 0; i < len; i++) {
+                tmpObj = new WalkerObj(data[i].id, data[i].pos_lat, data[i].pos_long, data[i].pos_alt, data[i].angle, data[i].type, data[i].owner, data[i].status_fg, data[i].enable_fg, data[i].delete_fg);
+                
+                //check existance
+                var fg = 0;
+                for(var j=0; j<gObjList.length; j++){
+                    if(gObjList[j].id == tmpObj.id){
+                        fg = 1;
+                        break;
+                    }
+                }
+                //if find continue;
+                if(fg){
+                    continue;
+                }
+                gObjList.push(tmpObj);
+            }
+        }); 
+        
+        //radarへの更新処理
+        for(var i = 0; i < gObjList.length; i++) {
+            updataObjs2Radar(gObjList[i], 50);
+        }
     }
      
     function handleNotifications(event) {
@@ -402,8 +523,6 @@
         var putAngle = dataView.getInt16(0, true);
           
         log("covert pos lati="+putObjLati+" long="+putObjLong+ " angle="+putAngle);
-         
-        
     }
   
     function doubleToByteArray(number) {

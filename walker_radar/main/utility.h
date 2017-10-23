@@ -30,7 +30,7 @@ int getObjListLen(t_cell *bp);
 int updateObjList(t_cell* bp, t_objInfo obj);
 int deleteObj2List(t_cell *bp, t_objInfo obj);
 void deleteAllObjList(t_cell *bp);
-
+void printObjList(t_cell *bp);
 void objListTest();
 
 #endif

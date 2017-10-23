@@ -1387,7 +1387,7 @@ void app_main()
 
     int rawX, rawY;
     initObjList(&gObjList);
-    gMyObj.angle = 250;
+   // gMyObj.angle = 250;
     //test object
     //objListTest();
     while (1) {
@@ -1404,11 +1404,11 @@ void app_main()
         //notifyPutObject();
 
         //set angle
-        gMyObj.angle +=3;
+    /*    gMyObj.angle +=3;
         if(gMyObj.angle > 360){
             gMyObj.angle = 250;
         }
-
+*/
         char tmpBuf[11];
         char *bufP = tmpBuf;
         memcpy(bufP, (char*)(&gMyObj.id),1);
@@ -1417,14 +1417,7 @@ void app_main()
         memcpy(bufP+9, (short*)(&gMyObj.angle),2);
         esp_ble_gatts_set_attr_value(HANDLE_CUR_POS, sizeof(tmpBuf),(uint8_t *)tmpBuf);
 
-        //check object
-        t_cell *p=&gObjList;
-        cnt=0;
-        while(p->next!=NULL){
-            p=p->next;
-            printf("obj cnt=%d obj id=%d\n", cnt, p->node.id);
-            cnt++;
-        }
+        printObjList(&gObjList);
 
 #endif
 
@@ -1469,12 +1462,15 @@ void app_main()
         if(gAngle<0) gAngle+=360.0;
         if(gAngle>360) gAngle-=360.0;
 
+        gMyObj.angle = (short)gAngle;
+
+
         printf("compasX=%f, compasY=%f, gAngle=%f\n", compasX, compasY, gAngle);
 #endif
 //---> compas
 
 
-//        drawBase();
+       // drawBase();
 }
 
 

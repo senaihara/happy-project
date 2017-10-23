@@ -59,14 +59,13 @@ if (is_null($id) || is_null($pos_lat) || is_null($pos_long) || is_null($pos_alt)
     throw new Exception("input error. update_cur_pos.php id=$id lat=$pos_lat lang=$pos_long alt=$pos_alt angle=$pos_angle");
 }
 
-$sql="insert into objects (id, pos_lat, pos_long, pos_alt, pos_angle, create_time) 
-values ($id, $pos_lat, $pos_long, $pos_alt, $pos_angle , now()) 
+$sql="insert into objects (id, pos_lat, pos_long, pos_alt, pos_angle, create_time, update_time) 
+values ($id, $pos_lat, $pos_long, $pos_alt, $pos_angle , now(), now()) 
 on duplicate key update id=$id, pos_lat=$pos_lat, pos_long=$pos_long, pos_alt = $pos_alt, pos_angle=$pos_angle, update_time=now()";
 //error_log("sql=$sql");
 
 //DBへの接続
 $dbh = connectDb();
-header('Content-type: application/json');
 $stmt= connectDb()->query($sql);
 $count= $stmt->rowCount();
 $result = [[ 'result' => $count ]];

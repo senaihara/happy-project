@@ -16,6 +16,7 @@
             this.posLong = posLong;
             this.posAlt = posAlt;
             this.angle = angle;
+            this.type = type;
             this.owner = owner;
             this.statusFg = statusFg;
             this.enableFg = enableFg;
@@ -62,9 +63,10 @@
     function successCallback(position) {
         var lati = position.coords.latitude.toFixed(5);
         var long = position.coords.longitude.toFixed(5);
-        gLati = position.coords.latitude.toFixed(5);
-        gLong = position.coords.longitude.toFixed(5);
-        gAlt = position.coords.altitude;
+        gMyObj.pos_lat = position.coords.latitude.toFixed(5);
+        gMyObj.pos_long = position.coords.longitude.toFixed(5);
+        gMyObj.pos_alt = position.coords.altitude;
+        if(gMyObj.pos_alt == null) gMyObj.pos_alt = 0;
         
         var g_txt = "緯度：" + gLati + "<br>";
         g_txt += "経度：" + gLong + "<br>";  
@@ -165,7 +167,46 @@
                     return gCharaPutObj.startNotifications().then(_ => {
                         log('> Notifications started');
                         gCharaPutObj.addEventListener('characteristicvaluechanged',
-                        handleNotifications);
+                        function(event){
+                            let value = event.target.value;
+                            let a = [];
+                            for (let i = 0; i < value.byteLength; i++) {
+                                //a.push('0x' + ('00' + value.getUint8(i).toString(16)).slice(-2));
+                                a.push(value.getUint8(i).toString(16));
+                            }
+                            log('> notify ' + a.join(' '));
+                            
+                            var buffer = new ArrayBuffer(4);
+                            
+                            var dataView = new DataView(buffer);
+                            dataView.setUint8(0, parseInt(value.getUint8(0).toString(16),16));
+                            dataView.setUint8(1, parseInt(value.getUint8(1).toString(16),16));
+                            dataView.setUint8(2, parseInt(value.getUint8(2).toString(16),16));
+                            dataView.setUint8(3, parseInt(value.getUint8(3).toString(16),16));
+                            var putObjLati = dataView.getFloat32(0, true);
+                            
+                            dataView.setUint8(0, parseInt(value.getUint8(4).toString(16),16));
+                            dataView.setUint8(1, parseInt(value.getUint8(5).toString(16),16));
+                            dataView.setUint8(2, parseInt(value.getUint8(6).toString(16),16));
+                            dataView.setUint8(3, parseInt(value.getUint8(7).toString(16),16));
+                            var putObjLong = dataView.getFloat32(0, true);
+                              
+                            log("covert pos lati="+putObjLati+" long="+putObjLong+ " type="
+                            +value.getUint8(8).toString(16)+" owner="+value.getUint8(9).toString(16));
+                            var putObj = new WalkerObj();
+                            putObj.posLat = putObjLati;
+                            putObj.posLong = putObjLong;
+                            putObj.type = value.getUint8(8).toString(16);
+                            putObj.owner = value.getUint8(9).toString(16);
+                            
+                            putObjToDB(putObj);
+                            
+                        
+                        
+                        });
+                        
+                        
+                        //handleNotifications);
                     });
 
                });
@@ -273,20 +314,10 @@
         })
 
         $('#test').click(function(){
-           //updateObjs();
-           //return;
+          
+          putObjToDB(gMyObj);
+          
            
-           /* updateObjs();
-            log("gObjList len="+gObjList.length);
-            for(var i = 0; i< gObjList.length; i++){
-                log("i="+i);
-                gObjList[i].print();
-            }
-            */
-            walkerObj = new WalkerObj();
-            walkerObj.id = gCount;
-            updataObjs2Radar(walkerObj, 100);
-            gCount++;
             
             return;
         }) 
@@ -337,8 +368,6 @@
         gCharaCurPos.writeValue(sendBuf)
         .then(_ => {
         });
-
-         
     }
     
     function getRadarAngle(){
@@ -375,11 +404,9 @@
                 
                 //サーバへの現在位置の更新 
                 $.getJSON('https://160.16.116.250/walker/api/update_cur_pos.php',
-                {id:gMyId, pos_lat:gLati, pos_long:gLong, pos_alt:gAlt, pos_angle:gAngle })
+                {id:gMyId, pos_lat:gMyObj.pos_lat, pos_long:gMyObj.pos_long, pos_alt:gMyObj.pos_alt, pos_angle:gMyObj.angle })
                 .done(function(data) {
-                    //alert('getdata')
                     var len = data.length;
-                    log("len="+len);
                     for(var i = 0; i < len; i++) {
                         log("get data="+data[i].result);
                     }
@@ -444,7 +471,7 @@
         });   
     }
     
-    //オブジェクトの更新
+    //オブジェクトの更新(DBからobjectを取得してRadarに更新する)
     function updateObjs(){
         //DBからオブジェクトの受信
         //サーバへの現在位置の更新 
@@ -477,6 +504,23 @@
         for(var i = 0; i < gObjList.length; i++) {
             updataObjs2Radar(gObjList[i], 50);
         }
+    }
+    
+    //DBに対してobjの配置を行う
+    function putObjToDB(walkerObj){
+        //DBからオブジェクトの受信
+        //サーバへの現在位置の更新
+        // $.getJSON('https://160.16.116.250/walker/api/update_cur_pos.php',
+        //{id:gMyId, pos_lat:gMyObj.pos_lat, pos_long:gMyObj.pos_long, pos_alt:gMyObj.pos_alt, pos_angle:gMyObj.angle })
+        $.getJSON('https://160.16.116.250/walker/api/put_obj.php',
+        {pos_lat:walkerObj.posLat, pos_long:walkerObj.posLong, pos_alt:0, type:walkerObj.type, owner:walkerObj.owner})
+        .done(function(data) {
+            var len = data.length;
+            alert("getdata");
+            for(var i = 0; i < len; i++) {
+                log("get data="+data[i].result);
+            }
+        });
     }
      
     function handleNotifications(event) {

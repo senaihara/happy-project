@@ -184,7 +184,7 @@ static uint8_t put_obj_uuid[2] = {0x35, 0x2a};
 static const uint8_t cur_pos_val[11] ={0x00, 0x00, 0x00,0x00, 0x00,0x00, 0x00,0x00, 0x00, 0x00, 0x00};
 static const uint8_t map_obj_val[16] ={0x00,0x00, 0x00,0x00, 0x00,0x00, 0x00,0x00,0x00,0x00, 0x00,0x00, 0x00,0x00, 0x00,0x00};
 //static const uint8_t put_obj_val[10] ={0x00,0x00, 0x00,0x00, 0x00,0x00, 0x00,0x00,0x00,0x00};
-static const uint8_t put_obj_val[8] ={0x00,0x00, 0x00,0x00, 0x00,0x00, 0x00,0x00};
+static const uint8_t put_obj_val[10] ={0x00,0x00, 0x00,0x00, 0x00,0x00, 0x00,0x00};
 
 #define HANDLE_CUR_POS 42
 #define HANDLE_MAP_OBJ 44
@@ -597,11 +597,17 @@ static void notifyPutObject() {
     uint16_t length = 0;
     const uint8_t *prf_char;
     //esp_ble_gatts_get_attr_value(HANDLE_PUT_OBJ,  &length, &prf_char);
+    char tmpBuf[10];
+    char *bufP = tmpBuf;
+    memcpy(bufP, (float*)(&gPutObj.posLati),4);
+    memcpy(bufP+4, (float*)(&gPutObj.posLong),4);
+    memcpy(bufP+8, (short*)(&gPutObj.type),1);
+    memcpy(bufP+9, (short*)(&gPutObj.owner),1);
 
     //esp_ble_gatts_send_indicate(gatts_if_for_indicate, 0, attr_handle,
      //       value_len, value_arr, false);
     esp_ble_gatts_send_indicate(gatts_if_for_indicate, 0, attr_handle,
-            sizeof(t_objInfo), &gPutObj, false);
+            sizeof(tmpBuf), &tmpBuf, false);
 //esp_ble_gatts_send_indicate(gatts_if_for_indicate, 0, attr_handle,
  //           length, prf_char, false);
 
@@ -1401,7 +1407,7 @@ void app_main()
         gPutObj.angle = 300;
         printf("gMyObj  gLati=%f gLong=%f gAngle=%d\n", gMyObj.posLati, gMyObj.posLong, gMyObj.angle);
         printf("gPutObj  gLati=%f gLong=%f\n", gPutObj.posLati, gPutObj.posLong);
-        //notifyPutObject();
+        notifyPutObject();
 
         //set angle
     /*    gMyObj.angle +=3;

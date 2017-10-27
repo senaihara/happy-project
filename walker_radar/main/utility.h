@@ -33,5 +33,7 @@ void deleteAllObjList(t_cell *bp);
 void printObjList(t_cell *bp);
 void objListTest();
 
+void calcPlaneDistance(float lat, float lon, float alt, float *x, float *y, float*z);
+
 #endif
 

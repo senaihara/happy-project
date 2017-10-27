@@ -53,6 +53,8 @@
 #include <math.h>
 #include "utility.h"
 
+
+
 #define GATTS_TABLE_TAG "GATTS_TABLE_DEMO"
 
 #define HEART_PROFILE_NUM 			    1
@@ -1148,7 +1150,41 @@ void calcUIPos(float pre_x, float pre_y, float angle, float scale, float * pos_x
     float angle2, dist2;
     calcUIPos2(pre_x, pre_y, angle, scale, pos_x, pos_y, &angle2, &dist2);
 }
-void drawBase(){
+
+void drawObject(t_objInfo *obj, t_objInfo *obj_o, int backAngle, int backPreAngle){
+    float x, y,z, alt=0;
+    //自分に対してobjの位置を算出する。
+    //vector diff = blh2ecef(obj->posLati-myObj->posLati, obj->posLong-myObj->posLong, 0);
+
+#if 0
+    float lat, lon, alt, lat_o, lon_o, alt_o;
+    lat     =    obj->posLati;           /*--- 変換する位置座標(B27海側)*/
+    lon     =    obj->posLong;
+    alt=  0;
+
+    lat_o   =  myObj->posLati;         /*--- 原点の座標(B09山側)*/
+    lon_o   =  myObj->posLong;
+    alt_o   =  0;
+
+    lat     =    36.554754;           /*--- 変換する位置座標(B27海側)*/
+    lon     = 139.885162;
+    alt     =  0;
+
+     lat_o   =  36.548428;         /*--- 原点の座標(B09山側)*/
+     lon_o   = 139.880699;
+     alt_o=0;
+#endif
+
+     calcPlaneDistance(obj->posLati-obj_o->posLati, obj->posLong-obj_o->posLong, alt, &x, &y, &z);
+     float posx1, posy1;
+    calcUIPos(x, y, backAngle, gScale, &posx1, &posy1);
+    //printf("x=%f y=%f, z=%f", x, y, z);
+    TFT_print("A", posx1, posy1);
+
+
+}
+
+void drawDisplay(){
     uint16_t x, y, th, n, i;
     //TFT_fillWindow(TFT_BLACK);
 
@@ -1253,6 +1289,15 @@ void drawBase(){
 
     sprintf(buf,"%0.0fmm\n", gScale*RADAR_MAX_DIST);
     TFT_print(buf, (dispWin.x2-dispWin.x1)/2.0, (dispWin.y2-dispWin.y1)/2.0+gDispRadius);
+
+    //drawObject
+    t_cell *tmp=&gObjList;
+    while (tmp->next != NULL) {
+        tmp = tmp->next;
+        drawObject(&(tmp->node), &gMyObj, backAngle, backPreAngle);
+        printf("[cnt=%d id=%d] ",cnt, tmp->node.id);
+    }
+
 /*
     gScale+=0.2;
 
@@ -1396,6 +1441,19 @@ void app_main()
    // gMyObj.angle = 250;
     //test object
     //objListTest();
+
+    gMyObj.posLati = 36.548428;
+    gMyObj.posLong = 139.880699;
+
+    t_objInfo tmpObj;
+    tmpObj.posLati = 36.549160;
+    tmpObj.posLong = 139.880458;
+
+    //tmpObj.posLati = 36.554754;
+    //tmpObj.posLong = 139.885162;
+    updateObjList(&gObjList, tmpObj);
+
+
     while (1) {
 #if 1
         printf("cnt: %d\n", cnt++);
@@ -1426,6 +1484,8 @@ void app_main()
         printObjList(&gObjList);
 
 #endif
+
+
 
 //comasp
 #if 0
@@ -1476,7 +1536,7 @@ void app_main()
 //---> compas
 
 
-       // drawBase();
+        drawDisplay();
 }
 
 

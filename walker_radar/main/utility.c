@@ -171,4 +171,17 @@ void objListTest(){
 
 }
 
+void calcPlaneDistance(float lat, float lon, float alt, float *x, float *y, float*z){
+    float latCoefd = 0.011118;
+    float latCoefm = 1234.428;
+    float longCoefd = 0.015493;
+    float longCoefm = 1386.226;
 
+    *y=lat/latCoefd;
+    *y=*y*latCoefm;
+
+    *x=-1.0*lon/longCoefd;
+    *x=*x*longCoefm;
+
+    *z=0;
+}

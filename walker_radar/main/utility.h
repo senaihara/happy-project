@@ -14,6 +14,8 @@ typedef struct {
     char status;
     char enableFg;
     char viewFg;
+    float prePosLati;
+    float prePosLong;
 } t_objInfo;
 
 typedef struct t_cell

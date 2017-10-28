@@ -60,7 +60,7 @@
 #define HEART_PROFILE_NUM 			    1
 #define HEART_PROFILE_APP_IDX 			0
 #define ESP_HEART_RATE_APP_ID			0x55
-#define SAMPLE_DEVICE_NAME              "ESP_HEART_RATE"
+#define SAMPLE_DEVICE_NAME              "WakerRadar"
 #define SAMPLE_MANUFACTURER_DATA_LEN    17
 #define HEART_RATE_SVC_INST_ID	    	0
 
@@ -323,6 +323,8 @@ int gDispWidth = 0;
 float gAngle=0;    //北を起点としてCW方向を正とする
 float gPreAngle=0;    //北を起点としてCW方向を正とする
 float gScale=1.0;
+float gPreScale=1.0;
+
 color_t gBaseColor1 = {.r = 102, .g=255, .b = 102};
 //gBaseColor1.r = 102;
 //gBaseColor1.g = 255;
@@ -407,6 +409,10 @@ static void gatts_profile_event_handler(esp_gatts_cb_event_t event,
     	    if(param->write.handle==HANDLE_CUR_POS){
     	        esp_ble_gatts_get_attr_value(HANDLE_CUR_POS,  &length, &p);
             unsigned char latBuf[4], longBuf[4];
+            //以前の情報のバックアップ
+            gMyObj.prePosLati=gMyObj.posLati;
+            gMyObj.prePosLong=gMyObj.posLong;
+
             gMyObj.id = *p;
             memcpy(latBuf, p+1, 4);
             memcpy(longBuf, p+5, 4);
@@ -1120,24 +1126,30 @@ void init_encoder(){
 //pre_x, pre_y 実世界の座標。
 // apos_x, apos_y 変換後の画像座標系での位置
 //angle 0-360
-void calcUIPos2(float pre_x, float pre_y, float angle, float scale, float * pos_x, float * pos_y, float *angle2, float *dist2){
-
+//dist2 画面上での距離(log計算の後)
+//angle3 画面上での角度(画面Y軸が基準で、時計回り)
+void calcUIPos2(float pre_x, float pre_y, float angle, float scale, float * pos_x, float * pos_y, float *angle3, float *dist2){
+    float angle2;
     //まずは、中心からの距離と角度を算出する。
     float dist = sqrt(pre_x*pre_x+pre_y*pre_y);
     float angle1 = atan2(pre_y, pre_x)*180.0/PI;
     //printf("%f %f %f %f\n",atan2(1, 1),atan2(1, -1),atan2(-1, -1),atan2(-1, 1));
-    *angle2 = angle1-angle; //方位磁針の角度を反映する
-    *angle2 = fmod(*angle2, 360.0);
-    //printf("angle=%f angle2=%f",angle, *angle2);
-    if(*angle2<0){
-        *angle2+=360.0;
+    angle2 = angle1+angle; //方位磁針の角度を反映する
+    angle2 = fmod(angle2, 360.0);
+    //*angle2 = 360 -*angle2;
+
+    *angle3 = 90-angle2;
+    if(*angle3<0){
+            *angle3+=360.0;
     }
+    printf("calcUIPos2 angle=%f angle1=%f, angle2=%f, angle3=%f\n",angle, angle1, angle2, *angle3);
+
     //printf(" angle22=%f\n",*angle2);
     float rate = gDispRadius/(log10(RADAR_MAX_DIST*scale));
 
     *dist2 = log10(dist)*rate;
-    *pos_x = *dist2*cos(*angle2*PI/180.0)+(dispWin.x2-dispWin.x1)/2.0;
-    *pos_y = -1.0*(*dist2)*sin(*angle2*PI/180.0)+(dispWin.y2-dispWin.y1)/2.0;
+    *pos_x = *dist2*cos(angle2*PI/180.0)+(dispWin.x2-dispWin.x1)/2.0;
+    *pos_y = -1.0*(*dist2)*sin(angle2*PI/180.0)+(dispWin.y2-dispWin.y1)/2.0;
     //printf("prex=%f, prey=%f, angle=%f, angle2=%f, rate=%f, dist=%f, dist2=%f, posx=%f, posy=%f, log10=%f, disp=%f\n",
     //           pre_x, pre_y, angle, *angle2, rate, dist, *dist2, *pos_x,*pos_y, log10(RADAR_MAX_DIST*scale), gDispRadius);
 }
@@ -1151,7 +1163,7 @@ void calcUIPos(float pre_x, float pre_y, float angle, float scale, float * pos_x
     calcUIPos2(pre_x, pre_y, angle, scale, pos_x, pos_y, &angle2, &dist2);
 }
 
-void drawObject(t_objInfo *obj, t_objInfo *obj_o, int backAngle, int backPreAngle){
+void drawObject(t_objInfo *obj, t_objInfo *obj_o){
     float x, y,z, alt=0;
     //自分に対してobjの位置を算出する。
     //vector diff = blh2ecef(obj->posLati-myObj->posLati, obj->posLong-myObj->posLong, 0);
@@ -1174,12 +1186,25 @@ void drawObject(t_objInfo *obj, t_objInfo *obj_o, int backAngle, int backPreAngl
      lon_o   = 139.880699;
      alt_o=0;
 #endif
+     float posx1, posy1, angle1, dist1;
+
+     //if((preBackAngle!=backAngle) || (obj->prePosLati!=obj->posLati) || (obj->prePosLong!=obj->posLong)
+        //     ||(obj_o->prePosLati!=obj_o->posLati) || (obj_o->prePosLong!=obj_o->posLong)){
+         calcPlaneDistance(obj->prePosLati-obj_o->prePosLati, obj->prePosLong-obj_o->prePosLong, alt, &x, &y, &z);
+         calcUIPos2(x, y, gPreAngle, gPreScale, &posx1, &posy1, &angle1, &dist1);
+//         TFT_drawArc((dispWin.x2-dispWin.x1)/2.0, (dispWin.y2-dispWin.y1)/2.0, dist1, 18, angle1-2, angle1+10, TFT_WHITE, TFT_BLACK);
+         printf("drawObject angle=%f\n",angle1);
+         TFT_drawArc((dispWin.x2-dispWin.x1)/2.0, (dispWin.y2-dispWin.y1)/2.0, dist1+2, 20+2, angle1-1, angle1+13, TFT_BLACK, TFT_BLACK);
+    //}
+
 
      calcPlaneDistance(obj->posLati-obj_o->posLati, obj->posLong-obj_o->posLong, alt, &x, &y, &z);
-     float posx1, posy1;
-    calcUIPos(x, y, backAngle, gScale, &posx1, &posy1);
-    //printf("x=%f y=%f, z=%f", x, y, z);
-    TFT_print("A", posx1, posy1);
+     printf("draw Object x=%f y=%f, z=%f\n", x, y, z);
+     calcUIPos(x, y, gAngle, gScale, &posx1, &posy1);
+     int backAngle= 360 - gAngle;
+     font_rotate = backAngle;
+     TFT_print("A", posx1, posy1);
+     font_rotate = 0;
 
 
 }
@@ -1201,49 +1226,49 @@ void drawDisplay(){
     //TFT_drawArc((dispWin.x2-dispWin.x1)/2.0, (dispWin.y2-dispWin.y1)/2.0, gDispRadius, 50, 320, 50, TFT_WHITE, TFT_WHITE);
     //TFT_drawArc(x, y, gDispRadius, th, start, end, gBaseColor1, gBaseColor1);
     //printf("x=%d, y=%d, radius=%f\n", x, y, gDispRadius);
+    //headerに自分の情報の更新
     float posx1, posy1, posx2, posy2;
     char buf[20];
-    sprintf(buf, "%0.5f, %0.5f", gMyObj.posLati, gMyObj.posLong);
+    int cnt=0;
+    sprintf(buf, "%0.5f %0.5f %d", gMyObj.posLati, gMyObj.posLong, gMyObj.angle);
     disp_header(buf);
 
-#if 1
     int backAngle= 360 - gAngle;
     int backPreAngle = 360 - gPreAngle;
 
+#if 1
     //drow axis
     //x axis
     if(gPreAngle!=gAngle){
-        calcUIPos(RADAR_MAX_DIST, 0, backPreAngle, gScale, &posx1, &posy1);
-        calcUIPos(-1.0*RADAR_MAX_DIST, 0, backPreAngle, gScale, &posx2, &posy2);
+        calcUIPos(RADAR_MAX_DIST, 0, gPreAngle, gScale, &posx1, &posy1);
+        calcUIPos(-1.0*RADAR_MAX_DIST, 0, gPreAngle, gScale, &posx2, &posy2);
         TFT_drawLine(posx1,posy1,posx2,posy2,TFT_BLACK);
     }
-    calcUIPos(RADAR_MAX_DIST, 0, backAngle, gScale, &posx1, &posy1);
-    calcUIPos(-1.0*RADAR_MAX_DIST, 0, backAngle, gScale, &posx2, &posy2);
+    calcUIPos(RADAR_MAX_DIST, 0, gAngle, gScale, &posx1, &posy1);
+    calcUIPos(-1.0*RADAR_MAX_DIST, 0, gAngle, gScale, &posx2, &posy2);
     TFT_drawLine(posx1,posy1,posx2,posy2,gBaseColor1);
 
     //y axis
     if(gPreAngle!=gAngle){
-        calcUIPos(0, RADAR_MAX_DIST, backPreAngle, gScale, &posx1, &posy1);
-        calcUIPos(0, -1.0*RADAR_MAX_DIST, backPreAngle, 1, &posx2, &posy2);
+        calcUIPos(0, RADAR_MAX_DIST, gPreAngle, gScale, &posx1, &posy1);
+        calcUIPos(0, -1.0*RADAR_MAX_DIST, gPreAngle, 1, &posx2, &posy2);
         TFT_drawLine(posx1,posy1,posx2,posy2,TFT_BLACK);
     }
-    calcUIPos(0, RADAR_MAX_DIST, backAngle, gScale, &posx1, &posy1);
-    calcUIPos(0, -1.0*RADAR_MAX_DIST, backAngle, 1, &posx2, &posy2);
+    calcUIPos(0, RADAR_MAX_DIST, gAngle, gScale, &posx1, &posy1);
+    calcUIPos(0, -1.0*RADAR_MAX_DIST, gAngle, 1, &posx2, &posy2);
     TFT_drawLine(posx1,posy1,posx2,posy2,gBaseColor1);
+#endif
 
-
+#if 1
     //arrow
-    //int fwidth, fheight;
-    //TFT_getfontsize(&fwidth, &fheight);
-    //printf("fwidth=%d, fheight=%d\n",fwidth, fheight);
-    float angle2, dist2;
+    float angle1, dist1;
+    //以前の領域をクリアする
     if(gPreAngle!=gAngle){
-        int backPreAngle= 360 - gPreAngle;
-        calcUIPos2(0, 100, backPreAngle, 1.0, &posx1, &posy1, &angle2, &dist2);
-        printf("angle=%d, angle2=%f\n", backPreAngle, angle2);
-        TFT_drawArc((dispWin.x2-dispWin.x1)/2.0, (dispWin.y2-dispWin.y1)/2.0, dist2, 18, backPreAngle-2, backPreAngle+10, TFT_BLACK, TFT_BLACK);
+        calcUIPos2(0, 300, gPreAngle, 1.0, &posx1, &posy1, &angle1, &dist1);
+        //printf("angle=%d, angle2=%f\n", backPreAngle, angle2);
+        TFT_drawArc((dispWin.x2-dispWin.x1)/2.0, (dispWin.y2-dispWin.y1)/2.0, dist1+2, 20, angle1-2, angle1+10, TFT_BLACK, TFT_BLACK);
     }
-    calcUIPos(0, 100, backAngle, 1.0, &posx1, &posy1);
+    calcUIPos(0, 300, gAngle, 1.0, &posx1, &posy1);
        color_t tmpColor = {.r = 102, .g=250, .b = 102};
        font_rotate = backAngle;
        _fg = gBaseColor1;
@@ -1251,37 +1276,16 @@ void drawDisplay(){
        TFT_setFont(DEJAVU18_FONT, NULL);
        TFT_print("N", posx1, posy1);
 
-
-
-    //calcUIPos(0, 100, gPreAngle, 1.0, &posx1, &posy1);
-    //TFT_clearStringRect(posx1, posy1, "N");
-    //TFT_print("\r", posx1, posy1);
-    //_fg = TFT_BLACK;
-    //_bg = TFT_BLACK;
-    //TFT_print("N", posx1, posy1);
-
-
     font_rotate = 0;
     _fg = gBaseColor1;
     _bg = TFT_BLACK;
-        //TFT_drawPolygon(posx1, posy1, 3, 10, tmpColor, gBaseColor1, 30, 3);
-
-    //sub scale
-    //calcUIPos(10, 0, 0, gScale, &posx1, &posy1);
-    //TFT_drawCircle((dispWin.x2-dispWin.x1)/2.0,(dispWin.y2-dispWin.y1)/2.0, posx1-(dispWin.x2-dispWin.x1)/2.0, gBaseColor1);
-    //TFT_print("10", 0, posy1);
 #endif
 
-    //calcUIPos(100, 0, 0, gScale, &posx1, &posy1);
-    //TFT_drawCircle((dispWin.x2-dispWin.x1)/2.0,(dispWin.y2-dispWin.y1)/2.0, posx1-(dispWin.x2-dispWin.x1)/2.0, gBaseColor1);
-
-    //sprintf(buf,"100 %3.1f\n", gScale);
-    //TFT_print(buf, (dispWin.x2-dispWin.x1)/2.0, posx1);
-
+#if 1
+    //text scale
     float currentMax = gScale*RADAR_MAX_DIST;
     float scale;
     int digits = log10(currentMax);
-    int cnt;
     for(i=digits, cnt=0; i>0&&cnt<3; i--, cnt++){
         scale = pow(10, i);
         calcUIPos(scale, 0, 0, gScale, &posx1, &posy1);
@@ -1293,12 +1297,13 @@ void drawDisplay(){
 
     sprintf(buf,"%0.0fmm\n", gScale*RADAR_MAX_DIST);
     TFT_print(buf, (dispWin.x2-dispWin.x1)/2.0, (dispWin.y2-dispWin.y1)/2.0+gDispRadius);
+#endif
 
     //drawObject
     t_cell *tmp=&gObjList;
     while (tmp->next != NULL) {
         tmp = tmp->next;
-        drawObject(&(tmp->node), &gMyObj, backAngle, backPreAngle);
+        drawObject(&(tmp->node), &gMyObj);
         printf("[cnt=%d id=%d] ",cnt, tmp->node.id);
     }
 
@@ -1448,6 +1453,8 @@ void app_main()
 
     gMyObj.posLati = 36.548428;
     gMyObj.posLong = 139.880699;
+    gMyObj.prePosLati = gMyObj.posLati;
+    gMyObj.prePosLong = gMyObj.posLong;
 
     t_objInfo tmpObj;
     tmpObj.posLati = 36.549160;
@@ -1480,7 +1487,8 @@ void app_main()
             gMyObj.angle = 250;
         }
 */
-
+#endif
+        //update myObj to share angle with browser
         char tmpBuf[11];
         char *bufP = tmpBuf;
         memcpy(bufP, (char*)(&gMyObj.id),1);
@@ -1490,7 +1498,6 @@ void app_main()
         esp_ble_gatts_set_attr_value(HANDLE_CUR_POS, sizeof(tmpBuf),(uint8_t *)tmpBuf);
 
         //printObjList(&gObjList);
-#endif
 
 
 

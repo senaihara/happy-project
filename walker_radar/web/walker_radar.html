@@ -43,23 +43,12 @@
     var gAccuracy=0;
     var gMapObj=null;
     var gMarkerArray;// = new google.maps.MVCArray();
+    var gTimerSwitch = true;
      
     function initMap() {             // google maps Javascript と同期
         if (navigator.geolocation) {   // 現在の位置情報を取得する
-          //navigator.geolocation.getCurrentPosition(successCallback, errorCallback,option);
-          
-      　　/*　
-          navigator.geolocation.getCurrentPosition(successCallback, errorCallback,
-            {                 // 位置取得オプション
-            "enableHighAccuracy":false,
-            "timeout":8000,
-            "maximumAge":100,
-            });
-        } else {
-          alert('navigator.geolocation は利用出来ません');
-        }*/
         
-        navigator.geolocation.watchPosition(successCallback, errorCallback,
+            navigator.geolocation.watchPosition(successCallback, errorCallback,
             {                 // 位置取得オプション
             "enableHighAccuracy":true,
             "timeout":8000,
@@ -69,15 +58,16 @@
           alert('navigator.geolocation は利用出来ません');
         }
     
-       gMarkerArray = new google.maps.MVCArray()  
+       gMarkerArray = new google.maps.MVCArray()
     }; //  initMap()  --------------
     
     //画面への表示情報の更新
     function updateInfo(){
-        var g_txt ="Count=" +gCount+ "緯度：" + gMyObj.pos_lat + "<br>";
-        g_txt += "経度：" + gMyObj.pos_long + "<br>";  
-        g_txt += "同精度：" + gAccuracy + " m<br>";
-        g_txt += "高度：" + gMyObj.pos_alt + " m<br>";
+        var g_txt ="count=" +gCount+ " id:"+gMyObj.id+"<br>"+"lati：" + gMyObj.pos_lat;
+        g_txt += " long：" + gMyObj.pos_long + "<br>";
+        g_txt += "angle：" + gMyObj.angle + "<br>";  
+        g_txt += "alt：" + gMyObj.pos_alt + " m<br>";
+        g_txt += "accuracy：" + gAccuracy + " m<br>";
         document.getElementById("txt_result").innerHTML = g_txt; // 位置の書き出し
         gCount+=1;
         
@@ -98,7 +88,7 @@
         gMyObj.pos_long = position.coords.longitude.toFixed(5);
         gMyObj.pos_alt = position.coords.altitude;
         if(gMyObj.pos_alt == null) gMyObj.pos_alt = 0;
-        gAccuracy=position.coords.accuracy;
+            gAccuracy=position.coords.accuracy;
         // Google Mapsに書き出し ------------------
         var latlng = new google.maps.LatLng( gMyObj.pos_lat,gMyObj.pos_long );        // 地図の中心
         
@@ -136,18 +126,19 @@
     $(function() {
         //initialize
         //初期設定
+        gMyObj.id = 1;
         
         setInterval(function(){
-            if(gGattModeFg%2==0){
-                log("updatePos")
-                updateCurPosAll();
-            }else{
-                log("getRadarAngle")
-                //getRadarAngle();
-            } 
-           gGattModeFg++;
-        },1000);
-        
+            if(gTimerSwitch){
+                if(gGattModeFg%2==0){
+                    updateCurPosAll();
+                }else if(gGattModeFg%2==1){
+                    getRadarAngleFromRadar(50);
+                }
+                updateInfo();
+                gGattModeFg+=1;
+            }
+        },500);
         
         $('#ble_connect').click(function(){
            //alert('connect')
@@ -232,12 +223,7 @@
                             putObj.owner = value.getUint8(9).toString(16);
                             
                             putObjToDB(putObj);
-                            
-                        
-                        
-                        });
-                        
-                        
+                       });                       
                         //handleNotifications);
                     });
 
@@ -291,6 +277,7 @@
 	//自分の座標位置の更新                          
         $('#update_pos').click(function(){
             updateCurPosAll(50);
+            updateInfo();
         })
 
         //オブジェクトの追加                          
@@ -344,12 +331,22 @@
             gDevice.gatt.disconnect()
             gDevice = null;
         })
+        
+        $('#timer_switch').click(function(){
+            if(gTimerSwitch){
+                $('#timer_switch').val('timer switch off');
+            }else{
+                $('#timer_switch').val('timer switch on');
+            }
+            gTimerSwitch =  !gTimerSwitch;
+        })
 
         $('#test').click(function(){
           
-          putObjToDB(gMyObj);
-          
-           
+            //putObjToDB(gMyObj);
+            //getRadarAngleFromRadar(50);
+            updateCurPos2Radar(20);
+            updateInfo(); 
             
             return;
         }) 
@@ -358,7 +355,7 @@
     
     //Radarへの現在位置の更新
     function updateCurPos2Radar(retryCount){
-        if(gDevice==null || gCharaCurPos == null){
+        if(gDevice==null || gCharaCurPos == null || gCharaCurPos==null){
             log("gDevice or gCharaCurPos = null");
             return;
         }
@@ -371,19 +368,18 @@
             dataView.setUint8(0, parseInt(val.getUint8(9).toString(16),16));
             dataView.setUint8(1, parseInt(val.getUint8(10).toString(16),16));
             gMyObj.angle = dataView.getUint16(0, true);
-            log("gMyObj.angle="+gMyObj.angle);
+            //log("gMyObj.angle="+gMyObj.angle);
         })
         */
-
         var f1 = new Float32Array(1);
         f1[0] = gMyObj.pos_lat;
-        log(gMyObj.pos_lat+" "+f1[0])  
+        //log(gMyObj.pos_lat+" "+f1[0])  
         var arrayLati = new Int8Array(f1.buffer)
       
         var f2 = new Float32Array(1);
         f2[0] = gMyObj.pos_long;
         var tmpArray = []
-        log(gMyObj.ps_long+" "+f2[0])
+        //log(gMyObj.ps_long+" "+f2[0])
         var arrayLong = new Int8Array(f2.buffer);
                  
         var sendBuf = new Int8Array(9);
@@ -409,7 +405,7 @@
         });
     }
     
-    function getRadarAngle(){
+    function getRadarAngleFromRadar(retryCount){
         if(gDevice==null || gCharaCurPos == null){
             log("gDevice or gCharaCurPos = null");
             return;
@@ -421,50 +417,40 @@
             dataView.setUint8(0, parseInt(val.getUint8(9).toString(16),16));
             dataView.setUint8(1, parseInt(val.getUint8(10).toString(16),16));
             gMyObj.angle = dataView.getUint16(0, true);
-            log("gMyObj.angle="+gMyObj.angle);
+            //log("gMyObj.angle="+gMyObj.angle);
         })
+        .catch(error => {
+            retryCount--;
+            log("getRadarAngle retryCount"+retryCount)
+            if (retryCount > 0) {
+                return getRadarAngleFromRadar(retryCount);
+            }
+            log("read radapos error.");
+            return Promise.reject(error);
+        });
     }
     
     function updateCurPosAll(){ 
-        if (navigator.geolocation) {   // 現在の位置情報を取得する
-            navigator.geolocation.getCurrentPosition(
-            function(position){
-                log("get new position");
-                gMyId = 1;
-                //gMyId = $('#myId').val();
-                gMyObj.pos_lat = position.coords.latitude.toFixed(5);
-                gMyObj.pos_long = position.coords.longitude.toFixed(5);
-                gMyObj.pos_alt = position.coords.altitude;
-                if(gMyObj.pos_alt==null){
-                    gMyObj.pos_alt=0;
-                }
-                
-                //Radarへの現在位置の更新
-                updateCurPos2Radar(50);
-                
-                //サーバへの現在位置の更新 
-                $.getJSON('https://160.16.116.250/walker/api/update_cur_pos.php',
-                {id:gMyId, pos_lat:gMyObj.pos_lat, pos_long:gMyObj.pos_long, pos_alt:gMyObj.pos_alt, pos_angle:gMyObj.angle })
-                .done(function(data) {
-                    var len = data.length;
-                    for(var i = 0; i < len; i++) {
-                        log("update_cur_pos.php resul="+data[i].result);
-                    }
-                });  
-            },
-            function(error){
-                log("exec update_cur_pos.php error="+error.code);
-            },
-            //option
-            {"enableHighAccuracy":true, "timeout":8000, "maximumAge":100, }
-            );  
-        } else {
-          alert('navigator.geolocation は利用出来ません');
-          return;
-        } 
+        //Radarへの現在位置の更新
+        updateCurPos2Radar(50);
+        
+        if(gMyObj.pos_lat==null || gMyObj.pos_long == null || gMyObj.angle==null){
+            log("gMyObj not initialized");
+             return;
+        }
+        
+        //サーバへの現在位置の更新 
+        $.getJSON('https://160.16.116.250/walker/api/update_cur_pos.php',
+        {id:gMyId, pos_lat:gMyObj.pos_lat, pos_long:gMyObj.pos_long, pos_alt:gMyObj.pos_alt, pos_angle:gMyObj.angle })
+        .done(function(data) {
+            var len = data.length;
+            for(var i = 0; i < len; i++) {
+                log("update_cur_pos.php resul="+data[i].result);
+            }
+        });  
         
         //画面情報の更新
-        updateInfo();
+        //updateInfo();
     }
     
     //Radarへのオブジェクトの更新
@@ -479,7 +465,7 @@
         
         var d1 = new Int16Array(1);
         d1[0] = walkerObj.angle;
-        var arrayAngle = new Int8Array(d1.buffer);
+        var arrayAngle = new IntArray(d1.buffer);
         
         //id[1],lat[4],long[4],angle[2],type[1],owner[1],status[1],enableFg[1],viewFg[1]
                  
@@ -501,7 +487,7 @@
         sendBuf[14] = walkerObj.enableFg;//enableFg
         sendBuf[15] = walkerObj.viewFg;//viewFg
         
-        log("update obj sendBuf "+sendBuf);
+        //log("update obj sendBuf "+sendBuf);
         return gCharaMapObj.writeValue(sendBuf)
        .catch(error => {
             retryCount--;
@@ -692,7 +678,7 @@
 </head>
 <body>
     <div id="gmap">ここに地図</div>
-    <h4>　【現在位置】</h4>
+    <h4>MyObjInfo</h4>
     <div id="txt_result">ここに位置情報</div><br>
     
     
@@ -712,12 +698,13 @@
     
     <input id="myId" type="text" list="myIds" autofocus placeholder="My ID">
     
-    <input type="button" id="ble_connect" value="ble connect"/><br/>
+    <input type="button" id="ble_connect" value="ble connect"/>
+    <input type="button" id="ble_disconnect" value="ble disconnect"/><br/>
+    <input type="button" id="timer_switch" value="timer switch on"/><br/> 
     <input type="button" id="ble_read_test" value="ble read test"/><br/>
     <input type="button" id="ble_write_test" value="ble write test"/><br/>
     <input type="button" id="update_pos" value="update pos"/><br/>
     <input type="button" id="update_obj" value="update obj"/><br/>
-    <input type="button" id="ble_disconnect" value="ble disconnect"/><br/>
    
     <form>
         <input id="service" type="text" list="services" autofocus placeholder="Bluetooth Service">

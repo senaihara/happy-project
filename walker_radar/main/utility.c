@@ -35,6 +35,10 @@ t_cell* getObjPtr(t_cell *bp, t_objInfo obj){
 
 //t_cellのノードにobjの値を更新する
 void copyObjData(t_cell *p, t_objInfo obj){
+    //以前の位置情報を保管しておく。
+    p->node.prePosLati = p->node.posLati;
+    p->node.prePosLong = p->node.posLong;
+
     p->node.id = obj.id;
     p->node.posLati = obj.posLati;
     p->node.posLong = obj.posLong;
@@ -56,6 +60,10 @@ int addObj2List(t_cell* bp, t_objInfo obj){
     tmp->before = NULL;
     tmp->next = NULL;
     copyObjData(tmp, obj);
+    //追加した時だけ、以前の情報に現在の値を入れる。
+    tmp->node.prePosLati = tmp->node.posLati;
+    tmp->node.prePosLong = tmp->node.posLong;
+
     //printf("exec copyObjData\n");
 
     //find last node

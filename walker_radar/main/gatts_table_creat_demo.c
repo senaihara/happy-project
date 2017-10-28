@@ -726,7 +726,7 @@ static void _dispTime()
 //---------------------------------
 static void disp_header(char *info)
 {
-    TFT_fillScreen(TFT_BLACK);
+    //TFT_fillScreen(TFT_BLACK);
     TFT_resetclipwin();
 
     _fg = TFT_YELLOW;
@@ -863,7 +863,7 @@ void tft_demo_init() {
 
     disp_rot = 0;
     TFT_setRotation(disp_rot);
-    disp_header("ESP32 TFT DEMO");
+   // disp_header("ESP32 TFT DEMO");
     TFT_setFont(COMIC24_FONT, NULL);
     int tempy = TFT_getfontheight() + 4;
     _fg = TFT_ORANGE;
@@ -1033,7 +1033,7 @@ void init_tft(){
     TFT_resetclipwin();
 
     //application initialization
-    disp_header("ESP32 TFT DEMO");
+    //disp_header("ESP32 TFT DEMO");
     uint16_t x, y;
     x = (dispWin.x2 - dispWin.x1) / 2;
     y = (dispWin.y2 - dispWin.y1) / 2;
@@ -1202,6 +1202,10 @@ void drawDisplay(){
     //TFT_drawArc(x, y, gDispRadius, th, start, end, gBaseColor1, gBaseColor1);
     //printf("x=%d, y=%d, radius=%f\n", x, y, gDispRadius);
     float posx1, posy1, posx2, posy2;
+    char buf[20];
+    sprintf(buf, "%0.5f, %0.5f", gMyObj.posLati, gMyObj.posLong);
+    disp_header(buf);
+
 #if 1
     int backAngle= 360 - gAngle;
     int backPreAngle = 360 - gPreAngle;
@@ -1270,7 +1274,7 @@ void drawDisplay(){
 
     //calcUIPos(100, 0, 0, gScale, &posx1, &posy1);
     //TFT_drawCircle((dispWin.x2-dispWin.x1)/2.0,(dispWin.y2-dispWin.y1)/2.0, posx1-(dispWin.x2-dispWin.x1)/2.0, gBaseColor1);
-    char buf[16];
+
     //sprintf(buf,"100 %3.1f\n", gScale);
     //TFT_print(buf, (dispWin.x2-dispWin.x1)/2.0, posx1);
 
@@ -1455,9 +1459,12 @@ void app_main()
 
 
     while (1) {
-#if 1
+        //print current status
+        printf("gMyObj pos_lat=%f pos_long=%f pos_alt=%f angle=%d\n",gMyObj.posLati, gMyObj.posLong, gMyObj.posAlt, gMyObj.angle);
+
+#if 0
         printf("cnt: %d\n", cnt++);
-        vTaskDelay(5000 / portTICK_RATE_MS);
+   //    vTaskDelay(5000 / portTICK_RATE_MS);
  //       ble_indicate2(cnt);
         printf("sizeof objInfo=%d\n", sizeof(gMapObj));
         gPutObj.posLati = gMyObj.posLati;
@@ -1473,6 +1480,7 @@ void app_main()
             gMyObj.angle = 250;
         }
 */
+
         char tmpBuf[11];
         char *bufP = tmpBuf;
         memcpy(bufP, (char*)(&gMyObj.id),1);
@@ -1481,14 +1489,13 @@ void app_main()
         memcpy(bufP+9, (short*)(&gMyObj.angle),2);
         esp_ble_gatts_set_attr_value(HANDLE_CUR_POS, sizeof(tmpBuf),(uint8_t *)tmpBuf);
 
-        printObjList(&gObjList);
-
+        //printObjList(&gObjList);
 #endif
 
 
 
 //comasp
-#if 0
+#if 1
         mpu9250_mag_update(&mpu9250_data);
         printf("originValues:%03d %03d %03d  magValues: %03d %03d %03d\n",
         mpu9250_mag_get(&mpu9250_data, 1, 0),

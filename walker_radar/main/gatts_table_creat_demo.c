@@ -288,9 +288,11 @@ static const char *file_fonts[3] = {"/spiffs/fonts/DotMatrix_M.fon", "/spiffs/fo
 
 // ==================================================
 //encoder definition
-#define GPIO_INPUT_IO_0     0
-#define GPIO_INPUT_IO_1     4
-#define GPIO_INPUT_PIN_SEL  ((1<<GPIO_INPUT_IO_0) | (1<<GPIO_INPUT_IO_1))
+#define GPIO_INPUT_IO_A     15
+#define GPIO_INPUT_IO_B     4
+#define GPIO_INPUT_IO_ES     16 //encoder switch
+#define GPIO_INPUT_IO_BS     17 //bottun switch
+#define GPIO_INPUT_PIN_SEL  ((1<<GPIO_INPUT_IO_A) | (1<<GPIO_INPUT_IO_B))
 #define ESP_INTR_FLAG_DEFAULT 0
 static xQueueHandle gpio_evt_queue = NULL;
 
@@ -1064,8 +1066,8 @@ static void gpio_task_example(void* arg)
         if(xQueueReceive(gpio_evt_queue, &io_num, portMAX_DELAY)) {
             //gpio_intr_disable(GPIO_INPUT_IO_0);
                //gpio_isr_handler_remove(GPIO_INPUT_IO_0);
-               int val0 = gpio_get_level( GPIO_INPUT_IO_0);
-        int val1 = gpio_get_level( GPIO_INPUT_IO_1);
+               int val0 = gpio_get_level( GPIO_INPUT_IO_A);
+        int val1 = gpio_get_level( GPIO_INPUT_IO_B);
         if((val0 == 1&& val1==1) ||( val0==0 &&val1==0) ){
             fg = 1;
             valfg = val0;
@@ -1102,7 +1104,7 @@ void init_encoder(){
     //io_conf.intr_type = GPIO_PIN_INTR_NEGEDGE;
     io_conf.intr_type = GPIO_PIN_INTR_ANYEDGE;
     //bit mask of the pins, use GPIO4/5 here
-    io_conf.pin_bit_mask = GPIO_INPUT_PIN_SEL;
+    io_conf.pin_bit_mask = (1<<GPIO_INPUT_IO_A) | (1<<GPIO_INPUT_IO_B) | (1<<GPIO_INPUT_IO_ES) | (1<<GPIO_INPUT_IO_BS);
     //set as input mode
     io_conf.mode = GPIO_MODE_INPUT;
     //enable pull-up mode
@@ -1117,9 +1119,9 @@ void init_encoder(){
     //install gpio isr service
     gpio_install_isr_service(ESP_INTR_FLAG_DEFAULT);
     //hook isr handler for specific gpio pin
-    gpio_isr_handler_add(GPIO_INPUT_IO_0, gpio_isr_handler, (void*) GPIO_INPUT_IO_0);
+    gpio_isr_handler_add(GPIO_INPUT_IO_A, gpio_isr_handler, (void*) GPIO_INPUT_IO_A);
     //hook isr handler for specific gpio pin
-    gpio_isr_handler_add(GPIO_INPUT_IO_1, gpio_isr_handler, (void*) GPIO_INPUT_IO_1);
+    gpio_isr_handler_add(GPIO_INPUT_IO_B, gpio_isr_handler, (void*) GPIO_INPUT_IO_B);
 
 }
 
@@ -1466,8 +1468,12 @@ void app_main()
 
 
     while (1) {
+#if 0
         //print current status
         printf("gMyObj pos_lat=%f pos_long=%f pos_alt=%f angle=%d\n",gMyObj.posLati, gMyObj.posLong, gMyObj.posAlt, gMyObj.angle);
+        //switch test
+        printf("Encoder Switch=%d Buck Switch=%d\n",gpio_get_level(GPIO_INPUT_IO_ES), gpio_get_level(GPIO_INPUT_IO_BS));
+#endif
 
 #if 0
         printf("cnt: %d\n", cnt++);
@@ -1488,6 +1494,8 @@ void app_main()
         }
 */
 #endif
+
+#if 0
         //update myObj to share angle with browser
         char tmpBuf[11];
         char *bufP = tmpBuf;
@@ -1496,13 +1504,13 @@ void app_main()
         memcpy(bufP+5, (float*)(&gMyObj.posLong),4);
         memcpy(bufP+9, (short*)(&gMyObj.angle),2);
         esp_ble_gatts_set_attr_value(HANDLE_CUR_POS, sizeof(tmpBuf),(uint8_t *)tmpBuf);
-
+#endif
         //printObjList(&gObjList);
 
 
 
 //comasp
-#if 1
+#if 0
         mpu9250_mag_update(&mpu9250_data);
         printf("originValues:%03d %03d %03d  magValues: %03d %03d %03d\n",
         mpu9250_mag_get(&mpu9250_data, 1, 0),
@@ -1550,7 +1558,7 @@ void app_main()
 //---> compas
 
 
-        drawDisplay();
+        //drawDisplay();
 }
 
 

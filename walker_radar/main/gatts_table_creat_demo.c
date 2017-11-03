@@ -29,6 +29,7 @@
 #include "gatts_table_creat_demo.h"
 
 #include <time.h>
+#include <sys/time.h>
 #include <errno.h>
 #include <sys/fcntl.h>
 #include <stdio.h>
@@ -284,6 +285,7 @@ static struct tm* tm_info;
 static char tmp_buff[64];
 static time_t time_now, time_last = 0;
 static const char *file_fonts[3] = {"/spiffs/fonts/DotMatrix_M.fon", "/spiffs/fonts/Ubuntu.fon", "/spiffs/fonts/Grotesk24x48.fon"};
+static struct timeval gTime, gPreTime;
 
 #define GDEMO_TIME 1000
 #define GDEMO_INFO_TIME 1000
@@ -423,6 +425,8 @@ static void gatts_profile_event_handler(esp_gatts_cb_event_t event,
             memcpy(longBuf, p+5, 4);
             gMyObj.posLati = *((float*)latBuf);
             gMyObj.posLong = *((float*)longBuf);
+            printf("curpos lat=%x %x %x %x\n", *(p+1), *(p+2), *(p+3), *(p+4));
+            printf("updated myObj gLati=%f gLong=%f\n", gMyObj.posLati, gMyObj.posLong);
             DPRINT("curpos lat=%x %x %x %x\n", *(p+1), *(p+2), *(p+3), *(p+4));
             DPRINT("updated myObj gLati=%f gLong=%f\n", gMyObj.posLati, gMyObj.posLong);
         }
@@ -739,24 +743,56 @@ static void _dispTime()
 static void disp_header(char *info)
 {
     //TFT_fillScreen(TFT_BLACK);
-    TFT_resetclipwin();
+    //TFT_resetclipwin();
 
     _fg = TFT_YELLOW;
-    _bg = (color_t){ 64, 64, 64 };
-
+    //_bg = (color_t){ 64, 64, 64 };
+    Font curr_font = cfont;
     if (_width < 240) TFT_setFont(DEF_SMALL_FONT, NULL);
     else TFT_setFont(DEFAULT_FONT, NULL);
-    TFT_fillRect(0, 0, _width-1, TFT_getfontheight()+8, _bg);
+
+    //TFT_fillRect(0, 0, _width-1, TFT_getfontheight()+8, _bg);
     TFT_drawRect(0, 0, _width-1, TFT_getfontheight()+8, TFT_CYAN);
 
-    TFT_fillRect(0, _height-TFT_getfontheight()-9, _width-1, TFT_getfontheight()+8, _bg);
-    TFT_drawRect(0, _height-TFT_getfontheight()-9, _width-1, TFT_getfontheight()+8, TFT_CYAN);
+    //TFT_fillRect(0, _height-TFT_getfontheight()-9, _width-1, TFT_getfontheight()+8, _bg);
+    //TFT_drawRect(0, _height-TFT_getfontheight()-9, _width-1, TFT_getfontheight()+8, TFT_CYAN);
 
     TFT_print(info, CENTER, 4);
-    _dispTime();
+    //TFT_print(info, CENTER, CENTER);
+    //_dispTime();
+
+
 
     _bg = TFT_BLACK;
-    TFT_setclipwin(0,TFT_getfontheight()+9, _width-1, _height-TFT_getfontheight()-10);
+    //TFT_setclipwin(0,TFT_getfontheight()+9, _width-1, _height-TFT_getfontheight()-10);
+}
+
+static void disp_footer(char *info)
+{
+    //TFT_fillScreen(TFT_BLACK);
+    //TFT_resetclipwin();
+
+    _fg = TFT_YELLOW;
+    //_bg = (color_t){ 64, 64, 64 };
+    Font curr_font = cfont;
+    if (_width < 240) TFT_setFont(DEF_SMALL_FONT, NULL);
+    else TFT_setFont(DEFAULT_FONT, NULL);
+
+    //TFT_fillRect(0, 0, _width-1, TFT_getfontheight()+8, _bg);
+    //TFT_drawRect(0, 0, _width-1, TFT_getfontheight()+8, TFT_CYAN);
+
+    //TFT_fillRect(0, _height-TFT_getfontheight()-9, _width-1, TFT_getfontheight()+8, _bg);
+    TFT_drawRect(0, _height-TFT_getfontheight()-9, _width-1, TFT_getfontheight()+8, TFT_CYAN);
+
+    TFT_print(info, CENTER, _height-TFT_getfontheight()-5);
+    //TFT_print(info, CENTER, 4);
+    //TFT_print(info, CENTER, CENTER);
+    //_dispTime();
+
+
+
+    _bg = TFT_BLACK;
+    //TFT_setclipwin(0,TFT_getfontheight()+9, _width-1, _height-TFT_getfontheight()-10);
 }
 
 
@@ -1207,18 +1243,19 @@ void drawObject(t_objInfo *obj, t_objInfo *obj_o){
      calcPlaneDistance(obj->posLati-obj_o->posLati, obj->posLong-obj_o->posLong, alt, &x, &y, &z);
      DPRINT("draw Object x=%f y=%f, z=%f\n", x, y, z);
      calcUIPos(x, y, gAngle, gScale, &posx1, &posy1);
+
      int backAngle= 360 - gAngle;
+     int pre_font_rotate = font_rotate;
      font_rotate = backAngle;
      TFT_print("A", posx1, posy1);
-
-
+     font_rotate = pre_font_rotate;
 
      //font_rotate = 0;
      //static const char *file_fonts[3] = {"/spiffs/fonts/DotMatrix_M.fon", "/spiffs/fonts/Ubuntu.fon", "/spiffs/fonts/Grotesk24x48.fon"};
 
      //TFT_setFont(USER_FONT, file_fonts[0]);
 
-     TFT_jpg_image(CENTER, CENTER, 3, SPIFFS_BASE_PATH"/images/test1.jpg", NULL, 0);
+     //TFT_jpg_image(CENTER, CENTER, 3, SPIFFS_BASE_PATH"/images/test1.jpg", NULL, 0);
      //TFT_bmp_image(CENTER, CENTER, 1, SPIFFS_BASE_PATH"/images/tiger.bmp", NULL, 0);
 /*     ESP_LOGI(TAG, "Initializing SPIFFS");
 
@@ -1324,7 +1361,28 @@ void drawDisplay(){
     char buf[20];
     int cnt=0;
     sprintf(buf, "%0.5f %0.5f %d", gMyObj.posLati, gMyObj.posLong, gMyObj.angle);
+    //sprintf(buf, "auau");
+    //printf("%0.5f %0.5f %3d\n", gMyObj.posLati, gMyObj.posLong, gMyObj.angle);
+
+    //sprintf(buf, "%0.5f %0.5f %f", gMyObj.posLati, gMyObj.posLong, gAngle);
     disp_header(buf);
+
+    //update time
+    gPreTime.tv_sec = gTime.tv_sec;
+    gPreTime.tv_usec = gTime.tv_usec;
+    struct timeval diffTime;
+    gettimeofday(&gTime, NULL);
+
+
+    timersub(&gTime, &gPreTime, &diffTime);
+    float samplingTime = diffTime.tv_sec*1000.0 + diffTime.tv_usec/1000.0;
+
+    sprintf(buf, "%4.1f", samplingTime);
+    disp_footer(buf);
+
+
+
+
 
     int backAngle= 360 - gAngle;
     int backPreAngle = 360 - gPreAngle;
@@ -1376,6 +1434,8 @@ void drawDisplay(){
     _bg = TFT_BLACK;
 #endif
 
+
+
 #if 1
     Font curr_font = cfont;
     TFT_setFont(DEFAULT_FONT, NULL);
@@ -1415,6 +1475,7 @@ void drawDisplay(){
     cfont = curr_font;
 #endif
 
+
     //drawObject
     t_cell *tmp=&gObjList;
     while (tmp->next != NULL) {
@@ -1434,7 +1495,7 @@ void drawDisplay(){
     if(gAngle>=360){
         gAngle = gAngle-360;
     }*/
-    vTaskDelay(100 / portTICK_RATE_MS);
+    //vTaskDelay(100 / portTICK_RATE_MS);
 }
 /* 配列の要素を交換する */
 void Swap(int x[ ], int i, int j)
@@ -1545,7 +1606,7 @@ void app_main()
 
     //init filesystem
 
-    disp_header("File system INIT");
+    //disp_header("File system INIT");
     _fg = TFT_CYAN;
     TFT_print("Initializing SPIFFS...", CENTER, CENTER);
     // ==== Initialize the file system ====
@@ -1560,7 +1621,7 @@ void app_main()
         TFT_print("SPIFFS Mounted.", CENTER, LASTY+TFT_getfontheight()+2);
     }
     Wait(-2000);
-
+    TFT_fillScreen(TFT_BLACK);
 
 
     //init encoder
@@ -1600,6 +1661,11 @@ void app_main()
     //tmpObj.posLong = 139.885162;
     updateObjList(&gObjList, tmpObj);
 
+    //GATT更新用の時間
+    time_t updateGATTTime=0, preUpdateGATTTime=0;
+
+
+
 
     while (1) {
 #if 1
@@ -1608,6 +1674,8 @@ void app_main()
         //switch test
         DPRINT("Encoder Switch=%d Buck Switch=%d\n",gpio_get_level(GPIO_INPUT_IO_ES), gpio_get_level(GPIO_INPUT_IO_BS));
 #endif
+
+
 
 #if 0
         DPRINT("cnt: %d\n", cnt++);
@@ -1630,16 +1698,25 @@ void app_main()
 #endif
 
 #if 1
-        //update myObj to share angle with browser
-        char tmpBuf[11];
-        char *bufP = tmpBuf;
-        memcpy(bufP, (char*)(&gMyObj.id),1);
-        memcpy(bufP+1, (float*)(&gMyObj.posLati),4);
-        memcpy(bufP+5, (float*)(&gMyObj.posLong),4);
-        memcpy(bufP+9, (short*)(&gMyObj.angle),2);
-        esp_ble_gatts_set_attr_value(HANDLE_CUR_POS, sizeof(tmpBuf),(uint8_t *)tmpBuf);
+        time(&updateGATTTime);
+        //printf("%d %d\n", (int)updateGATTTime, (int)preUpdateGATTTime);
+        if(updateGATTTime - preUpdateGATTTime > 2){
+
+            //update myObj to share angle with browser
+            char tmpBuf[11];
+            char *bufP = tmpBuf;
+            memcpy(bufP, (char*)(&gMyObj.id),1);
+            memcpy(bufP+1, (float*)(&gMyObj.posLati),4);
+            memcpy(bufP+5, (float*)(&gMyObj.posLong),4);
+            memcpy(bufP+9, (short*)(&gMyObj.angle),2);
+            esp_ble_gatts_set_attr_value(HANDLE_CUR_POS, sizeof(tmpBuf),(uint8_t *)tmpBuf);
+            printf("updage GATT\n");
+            printObjList(&gObjList);
+
+            preUpdateGATTTime = updateGATTTime;
+
+        }
 #endif
-        //printObjList(&gObjList);
 
 
 

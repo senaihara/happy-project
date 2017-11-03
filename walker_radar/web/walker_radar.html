@@ -138,7 +138,7 @@
                 updateInfo();
                 gGattModeFg+=1;
             }
-        },500);
+        },2000);
         
         $('#ble_connect').click(function(){
            //alert('connect')
@@ -340,7 +340,13 @@
             }
             gTimerSwitch =  !gTimerSwitch;
         })
-
+         $('#read_angle').click(function(){
+          
+            getRadarAngleFromRadar(1);
+            updateInfo(); 
+            
+            return;
+        }) 
         $('#test').click(function(){
           
             //putObjToDB(gMyObj);
@@ -465,7 +471,7 @@
         
         var d1 = new Int16Array(1);
         d1[0] = walkerObj.angle;
-        var arrayAngle = new IntArray(d1.buffer);
+        var arrayAngle = new Int8Array(d1.buffer);
         
         //id[1],lat[4],long[4],angle[2],type[1],owner[1],status[1],enableFg[1],viewFg[1]
                  
@@ -704,6 +710,7 @@
     <input type="button" id="ble_read_test" value="ble read test"/><br/>
     <input type="button" id="ble_write_test" value="ble write test"/><br/>
     <input type="button" id="update_pos" value="update pos"/><br/>
+    <input type="button" id="read_angle" value="read angle"/><br/>
     <input type="button" id="update_obj" value="update obj"/><br/>
    
     <form>

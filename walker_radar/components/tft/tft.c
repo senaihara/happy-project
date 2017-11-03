@@ -2398,13 +2398,13 @@ void TFT_jpg_image(int x, int y, uint8_t scale, char *fname, uint8_t *buf, int s
         dev.bufsize = 0;
         dev.bufptr = 0;
 
-		printf("tft jpeg0 filename=%s\n",fname);
+		//printf("tft jpeg0 filename=%s\n",fname);
 	
         if (stat(fname, &sb) != 0) {
         	if (image_debug) printf("File error: %ss\r\n", strerror(errno));
             goto exit;
         }
-        printf("tft jpeg1\n");
+        //printf("tft jpeg1\n");
 	
 
         dev.fhndl = fopen(fname, "r");
@@ -2416,15 +2416,15 @@ void TFT_jpg_image(int x, int y, uint8_t scale, char *fname, uint8_t *buf, int s
 
 	if (scale > 3) scale = 3;
 
-	printf("tft jpeg2\n");
+	//printf("tft jpeg2\n");
 	work = malloc(sz_work);
-	printf("tft jpeg3\n");
+	//printf("tft jpeg3\n");
 	
 	
 	if (work) {
 		if (dev.membuff) rc = jd_prepare(&jd, tjd_buf_input, (void *)work, sz_work, &dev);
 		else rc = jd_prepare(&jd, tjd_input, (void *)work, sz_work, &dev);
-		printf("tft jpeg4\n");
+		//printf("tft jpeg4\n");
 	
 		if (rc == JDR_OK) {
 			if (x == CENTER) x = ((dispWin.x2 - dispWin.x1 + 1 - (int)(jd.width >> scale)) / 2) + dispWin.x1;

@@ -74,7 +74,7 @@ uint8_t	font_forceFixed = 0;
 uint8_t	text_wrap = 0;			// character wrapping to new line
 color_t	_fg = {  0, 255,   0};
 color_t _bg = {  0,   0,   0};
-uint8_t image_debug = 0;
+uint8_t image_debug = 1;
 
 float _angleOffset = DEFAULT_ANGLE_OFFSET;
 
@@ -1030,7 +1030,6 @@ static int load_file_font(const char * fontfile, int info)
 
     struct stat sb;
 
-    // Open the file
     FILE *fhndl = fopen(fontfile, "r");
     if (!fhndl) {
     	sprintf(err_msg, "Error opening font file '%s'", fontfile);
@@ -2399,10 +2398,14 @@ void TFT_jpg_image(int x, int y, uint8_t scale, char *fname, uint8_t *buf, int s
         dev.bufsize = 0;
         dev.bufptr = 0;
 
+		printf("tft jpeg0 filename=%s\n",fname);
+	
         if (stat(fname, &sb) != 0) {
         	if (image_debug) printf("File error: %ss\r\n", strerror(errno));
             goto exit;
         }
+        printf("tft jpeg1\n");
+	
 
         dev.fhndl = fopen(fname, "r");
         if (!dev.fhndl) {
@@ -2413,10 +2416,16 @@ void TFT_jpg_image(int x, int y, uint8_t scale, char *fname, uint8_t *buf, int s
 
 	if (scale > 3) scale = 3;
 
+	printf("tft jpeg2\n");
 	work = malloc(sz_work);
+	printf("tft jpeg3\n");
+	
+	
 	if (work) {
 		if (dev.membuff) rc = jd_prepare(&jd, tjd_buf_input, (void *)work, sz_work, &dev);
 		else rc = jd_prepare(&jd, tjd_input, (void *)work, sz_work, &dev);
+		printf("tft jpeg4\n");
+	
 		if (rc == JDR_OK) {
 			if (x == CENTER) x = ((dispWin.x2 - dispWin.x1 + 1 - (int)(jd.width >> scale)) / 2) + dispWin.x1;
 			else if (x == RIGHT) x = dispWin.x2 + 1 - (int)(jd.width >> scale);
@@ -2434,12 +2443,12 @@ void TFT_jpg_image(int x, int y, uint8_t scale, char *fname, uint8_t *buf, int s
 
 			dev.linbuf[0] = heap_caps_malloc(JPG_IMAGE_LINE_BUF_SIZE*3, MALLOC_CAP_DMA);
 			if (dev.linbuf[0] == NULL) {
-				if (image_debug) printf("Error allocating line buffer\r\n");
+				if (image_debug) printf("Error allocating line buffer #0\r\n");
 				goto exit;
 			}
 			dev.linbuf[1] = heap_caps_malloc(JPG_IMAGE_LINE_BUF_SIZE*3, MALLOC_CAP_DMA);
-			if (dev.linbuf[0] == NULL) {
-				if (image_debug) printf("Error allocating line buffer\r\n");
+			if (dev.linbuf[1] == NULL) {
+				if (image_debug) printf("Error allocating line buffer #1\r\n");
 				goto exit;
 			}
 
@@ -2496,6 +2505,7 @@ int TFT_bmp_image(int x, int y, uint8_t scale, char *fname, uint8_t *imgbuf, int
     if (fname) {
     	// * File name is given, reading image from file
     	if (stat(fname, &sb) != 0) {
+    		printf("opening file error1\n");
 			sprintf(err_buf, "opening file");
     		err = -1;
     		goto exit;
@@ -2504,6 +2514,8 @@ int TFT_bmp_image(int x, int y, uint8_t scale, char *fname, uint8_t *imgbuf, int
 		fhndl = fopen(fname, "r");
 		if (!fhndl) {
 			sprintf(err_buf, "opening file");
+			printf("opening file 2\n");
+			
 			err = -2;
 			goto exit;
 		}
@@ -2751,10 +2763,12 @@ exit:
 
 // ============= Touch panel functions =========================================
 
-#if USE_TOUCH
-//-----------------------------------------------
-static int tp_get_data(uint8_t type, int samples)
+#if USE_TOUCH == TOUCH_TYPE_XPT2046
+//-------------------------------------------------------
+static int tp_get_data_xpt2046(uint8_t type, int samples)
 {
+	if (ts_spi == NULL) return 0;
+
 	int n, result, val = 0;
 	uint32_t i = 0;
 	uint32_t vbuf[18];
@@ -2810,92 +2824,139 @@ static int tp_get_data(uint8_t type, int samples)
 
     return val;
 }
+
+//-----------------------------------------------
+static int TFT_read_touch_xpt2046(int *x, int* y)
+{
+	int res = 0, result = -1;
+	if (spi_lobo_device_select(ts_spi, 0) != ESP_OK) return 0;
+
+    result = tp_get_data_xpt2046(0xB0, 3);  // Z; pressure; touch detect
+	if (result <= 50) goto exit;
+
+	// touch panel pressed
+	result = tp_get_data_xpt2046(0xD0, 10);
+	if (result < 0)  goto exit;
+
+	*x = result;
+
+	result = tp_get_data_xpt2046(0x90, 10);
+	if (result < 0)  goto exit;
+
+	*y = result;
+	res = 1;
+exit:
+	spi_lobo_device_deselect(ts_spi);
+	return res;
+}
 #endif
 
 //=============================================
 int TFT_read_touch(int *x, int* y, uint8_t raw)
 {
-#if USE_TOUCH
-	int result = -1;
-    int32_t X=0, Y=0, tmp;
-
     *x = 0;
     *y = 0;
+	if (ts_spi == NULL) return 0;
+    #if USE_TOUCH == TOUCH_TYPE_NONE
+	return 0;
+    #else
+	int result = -1;
+    int X=0, Y=0;
 
-	if (spi_lobo_device_select(ts_spi, 0) != ESP_OK) return 0;
+    #if USE_TOUCH == TOUCH_TYPE_XPT2046
+    uint32_t tp_calx = TP_CALX_XPT2046;
+    uint32_t tp_caly = TP_CALY_XPT2046;
+   	result = TFT_read_touch_xpt2046(&X, &Y);
+   	if (result == 0) return 0;
+    #elif USE_TOUCH == TOUCH_TYPE_STMPE610
+    uint32_t tp_calx = TP_CALX_STMPE610;
+    uint32_t tp_caly = TP_CALY_STMPE610;
+    uint16_t Xx, Yy, Z=0;
+    result = stmpe610_get_touch(&Xx, &Yy, &Z);
+    if (result == 0) return 0;
+    X = Xx;
+    Y = Yy;
+    #else
+    return 0;
+    #endif
 
-    result = tp_get_data(0xB0, 3);  // Z; pressure; touch detect
-	if (result > 50)  {
-		// touch panel pressed
-		result = tp_get_data(0xD0, 10);
-		if (result >= 0) {
-			X = result;
+    if (raw) {
+    	*x = X;
+    	*y = Y;
+    	return 1;
+    }
 
-			result = tp_get_data(0x90, 10);
-			if (result >= 0) Y = result;
-		}
-	}
-
-	if (result <= 50) {
-		result = 0;
-		goto exit;
-	}
-
-	if (raw) {
-		*x = X;
-		*y = Y;
-		goto exit;
-	}
-
+    // Calibrate the result
+	int tmp;
 	int xleft   = (tp_calx >> 16) & 0x3FFF;
 	int xright  = tp_calx & 0x3FFF;
 	int ytop    = (tp_caly >> 16) & 0x3FFF;
 	int ybottom = tp_caly & 0x3FFF;
 
-	int width = _width;
-	int height = _height;
+	if (((xright - xleft) <= 0) || ((ybottom - ytop) <= 0)) return 0;
 
-	if (((xright - xleft) != 0) && ((ybottom - ytop) != 0)) {
-		X = ((X - xleft) * height) / (xright - xleft);
-		Y = ((Y - ytop) * width) / (ybottom - ytop);
-	}
-	else {
-		result = 0;
-		goto exit;
-	}
+    #if USE_TOUCH == TOUCH_TYPE_XPT2046
+        int width = _width;
+        int height = _height;
+        X = ((X - xleft) * height) / (xright - xleft);
+        Y = ((Y - ytop) * width) / (ybottom - ytop);
 
-	if (X < 0) X = 0;
-	if (X > height-1) X = height-1;
-	if (Y < 0) Y = 0;
-	if (Y > width-1) Y = width-1;
+        if (X < 0) X = 0;
+        if (X > height-1) X = height-1;
+        if (Y < 0) Y = 0;
+        if (Y > width-1) Y = width-1;
 
-	switch (orientation) {
-		case PORTRAIT:
-			tmp = X;
-			X = width - Y - 1;
-			Y = tmp;
-			break;
-		case PORTRAIT_FLIP:
-			tmp = X;
-			X = Y;
-			Y = height - tmp - 1;
-			break;
-		case LANDSCAPE_FLIP:
-			X = height - X - 1;
-			Y = width - Y - 1;
-			break;
-	}
+        switch (orientation) {
+            case PORTRAIT:
+                tmp = X;
+                X = width - Y - 1;
+                Y = tmp;
+                break;
+            case PORTRAIT_FLIP:
+                tmp = X;
+                X = Y;
+                Y = height - tmp - 1;
+                break;
+            case LANDSCAPE_FLIP:
+                X = height - X - 1;
+                Y = width - Y - 1;
+                break;
+        }
+    #elif USE_TOUCH == TOUCH_TYPE_STMPE610
+        int width = _width;
+        int height = _height;
+        if (_width > _height) {
+            width = _height;
+            height = _width;
+        }
+		X = ((X - xleft) * width) / (xright - xleft);
+		Y = ((Y - ytop) * height) / (ybottom - ytop);
 
+		if (X < 0) X = 0;
+		if (X > width-1) X = width-1;
+		if (Y < 0) Y = 0;
+		if (Y > height-1) Y = height-1;
+
+		switch (orientation) {
+			case PORTRAIT_FLIP:
+				X = width - X - 1;
+				Y = height - Y - 1;
+				break;
+			case LANDSCAPE:
+				tmp = X;
+				X = Y;
+				Y = width - tmp -1;
+				break;
+			case LANDSCAPE_FLIP:
+				tmp = X;
+				X = height - Y -1;
+				Y = tmp;
+				break;
+		}
+    #endif
 	*x = X;
 	*y = Y;
-
-exit:
-	spi_lobo_device_deselect(ts_spi);
-	return result;
-#else
-    *x = 0;
-    *y = 0;
-    return 0;
-#endif
+	return 1;
+    #endif
 }
 

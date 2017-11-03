@@ -37,5 +37,12 @@ void objListTest();
 
 void calcPlaneDistance(float lat, float lon, float alt, float *x, float *y, float*z);
 
+//#define DEBUG_PRINT
+#ifdef DEBUG_PRINT
+#define DPRINT(fmt, ...) printf("%s(%d):" fmt, __func__, __LINE__, ## __VA_ARGS__)
+#else
+#define DPRINT(fmt, ...)
+#endif
+
 #endif
 

@@ -3,8 +3,11 @@
 # project subdirectory.
 #
 
-PROJECT_NAME := gatt_server_demos
+PROJECT_NAME := tft_demo
+
+EXTRA_CFLAGS += --save-temps
 
 COMPONENT_ADD_INCLUDEDIRS := components/include
 
 include $(IDF_PATH)/make/project.mk
+

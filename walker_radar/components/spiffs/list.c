@@ -149,7 +149,7 @@ int IRAM_ATTR list_get(struct list *list, int index, void **item) {
     return 0;
 }
 
-int list_remove(struct list *list, int index, int destroy) {
+int list_remove2(struct list *list, int index, int destroy) {
     struct list_index *cindex = NULL;
     int iindex;
 
@@ -203,7 +203,7 @@ int IRAM_ATTR list_first(struct list *list) {
     return res;
 }
 
-int IRAM_ATTR list_next(struct list *list, int index) {
+int IRAM_ATTR list_next2(struct list *list, int index) {
     int res = -1;
     int iindex;
     

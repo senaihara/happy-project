@@ -41,7 +41,10 @@
 #include "esp_heap_caps.h"
 #include "tftspi.h"
 #include "tft.h"
-//#include "spiffs_vfs.h"
+#include "spiffs_vfs.h"
+#include "esp_spiffs.h"
+#include "esp_log.h"
+
 
 //encoder
 #include "freertos/queue.h"
@@ -296,7 +299,7 @@ static const char *file_fonts[3] = {"/spiffs/fonts/DotMatrix_M.fon", "/spiffs/fo
 #define ESP_INTR_FLAG_DEFAULT 0
 static xQueueHandle gpio_evt_queue = NULL;
 
-int g_count =0;
+int gEnCnt=0;
 // ==================================================
 
 // ==================================================
@@ -420,8 +423,8 @@ static void gatts_profile_event_handler(esp_gatts_cb_event_t event,
             memcpy(longBuf, p+5, 4);
             gMyObj.posLati = *((float*)latBuf);
             gMyObj.posLong = *((float*)longBuf);
-            printf("curpos lat=%x %x %x %x\n", *(p+1), *(p+2), *(p+3), *(p+4));
-            printf("updated myObj gLati=%f gLong=%f\n", gMyObj.posLati, gMyObj.posLong);
+            DPRINT("curpos lat=%x %x %x %x\n", *(p+1), *(p+2), *(p+3), *(p+4));
+            DPRINT("updated myObj gLati=%f gLong=%f\n", gMyObj.posLati, gMyObj.posLong);
         }
 
     	    //Get Map Obj
@@ -443,7 +446,7 @@ static void gatts_profile_event_handler(esp_gatts_cb_event_t event,
             tmpObj.enableFg = *(p+14);
             tmpObj.viewFg = *(p+15);
 
-            printf("updated mapObj id=%d lati=%f long=%f angle=%d type=%d owner=%d status=%d enableFg=%d viewFg=%d\n",
+            DPRINT("updated mapObj id=%d lati=%f long=%f angle=%d type=%d owner=%d status=%d enableFg=%d viewFg=%d\n",
                     tmpObj.id, tmpObj.posLati, tmpObj.posLong, tmpObj.angle, tmpObj.type, tmpObj.owner, tmpObj.status, tmpObj.enableFg, tmpObj.viewFg);
             updateObjList(&gObjList, tmpObj);
         }
@@ -483,7 +486,7 @@ static void gatts_profile_event_handler(esp_gatts_cb_event_t event,
 
     	            //add indicator
     	            gatts_if_for_indicate = gatts_if;
-    	            //printf("set %d for gatts_if_for_indicate\n", gatts_if);
+    	            //DPRINT("set %d for gatts_if_for_indicate\n", gatts_if);
 
 
         	break;
@@ -492,7 +495,7 @@ static void gatts_profile_event_handler(esp_gatts_cb_event_t event,
     	    esp_ble_gap_start_advertising(&heart_rate_adv_params);
     	            //disconnect
     	            gatts_if_for_indicate = ESP_GATT_IF_NONE;
-    	            printf("set NONE for gatts_if_for_indicate\n");
+    	            DPRINT("set NONE for gatts_if_for_indicate\n");
 		break;
     	case ESP_GATTS_OPEN_EVT:
 		break;
@@ -558,10 +561,10 @@ static void gatts_event_handler(esp_gatts_cb_event_t event, esp_gatt_if_t gatts_
 
 static void ble_indicate(int value) {
     if (gatts_if_for_indicate == ESP_GATT_IF_NONE) {
-        printf("cannot indicate because gatts_if_for_indicate is NONE\n");
+        DPRINT("cannot indicate because gatts_if_for_indicate is NONE\n");
         return;
     }
-    printf("indicate %d to gatts_if:%d\n", value, gatts_if_for_indicate);
+    DPRINT("indicate %d to gatts_if:%d\n", value, gatts_if_for_indicate);
     uint16_t attr_handle = 0x002a;
     uint8_t value_len = 1;
     uint8_t value_arr[] = { value };
@@ -578,10 +581,10 @@ static void ble_indicate(int value) {
 
 static void ble_indicate2(int value) {
     if (gatts_if_for_indicate == ESP_GATT_IF_NONE) {
-        printf("cannot indicate because gatts_if_for_indicate is NONE\n");
+        DPRINT("cannot indicate because gatts_if_for_indicate is NONE\n");
         return;
     }
-    printf("indicate %d to gatts_if:%d\n", value, gatts_if_for_indicate);
+    DPRINT("indicate %d to gatts_if:%d\n", value, gatts_if_for_indicate);
     uint16_t attr_handle = HANDLE_PUT_OBJ;
     uint8_t value_len = 1;
     uint8_t value_arr[] = { value };
@@ -597,7 +600,7 @@ static void ble_indicate2(int value) {
 }
 static void notifyPutObject() {
     if (gatts_if_for_indicate == ESP_GATT_IF_NONE) {
-        printf("cannot indicate because gatts_if_for_indicate is NONE\n");
+        DPRINT("cannot indicate because gatts_if_for_indicate is NONE\n");
         return;
     }
     uint16_t attr_handle = HANDLE_PUT_OBJ;
@@ -723,7 +726,8 @@ static void _dispTime()
     time(&time_now);
     time_last = time_now;
     tm_info = localtime(&time_now);
-    sprintf(tmp_buff, "%02d:%02d:%02d", tm_info->tm_hour, tm_info->tm_min, tm_info->tm_sec);
+    //sprintf(tmp_buff, "%02d:%02d:%02d", tm_info->tm_hour, tm_info->tm_min, tm_info->tm_sec);
+    sprintf(tmp_buff, "enEnt=%d gScale=%f", gEnCnt, gScale);
     TFT_print(tmp_buff, CENTER, _height-TFT_getfontheight()-5);
 
     cfont = curr_font;
@@ -914,7 +918,7 @@ void tft_demo_init() {
             if (disp_rot == 2) sprintf(tmp_buff, "LANDSCAPE");
             if (disp_rot == 3) sprintf(tmp_buff, "PORTRAIT FLIP");
             if (disp_rot == 0) sprintf(tmp_buff, "LANDSCAPE FLIP");
-            printf("\r\n==========================================\r\nDisplay: %s: %s %d,%d %s\r\n\r\n",
+            DPRINT("\r\n==========================================\r\nDisplay: %s: %s %d,%d %s\r\n\r\n",
                     ((tft_disp_type == DISP_TYPE_ILI9341) ? "ILI9341" : "ILI9488"), tmp_buff, _width, _height, ((gray_scale) ? "Gray" : "Color"));
         }
 
@@ -994,16 +998,16 @@ void init_tft(){
 
 
     vTaskDelay(500 / portTICK_RATE_MS);
-    printf("\r\n==============================\r\n");
-    printf("TFT display DEMO, LoBo 07/2017\r\n");
-    printf("==============================\r\n\r\n");
+    DPRINT("\r\n==============================\r\n");
+    DPRINT("TFT display DEMO, LoBo 07/2017\r\n");
+    DPRINT("==============================\r\n\r\n");
 
     // ==================================================================
     // ==== Initialize the SPI bus and attach the LCD to the SPI bus ====
 
     ret=spi_lobo_bus_add_device(SPI_BUS, &buscfg, &devcfg, &spi);
     assert(ret==ESP_OK);
-    printf("SPI: display device added to spi bus (%d)\r\n", SPI_BUS);
+    DPRINT("SPI: display device added to spi bus (%d)\r\n", SPI_BUS);
     disp_spi = spi;
 
     // ==== Test select/deselect ====
@@ -1012,23 +1016,23 @@ void init_tft(){
     ret = spi_lobo_device_deselect(spi);
     assert(ret==ESP_OK);
 
-    printf("SPI: attached display device, speed=%u\r\n", spi_lobo_get_speed(spi));
-    printf("SPI: bus uses native pins: %s\r\n", spi_lobo_uses_native_pins(spi) ? "true" : "false");
+    DPRINT("SPI: attached display device, speed=%u\r\n", spi_lobo_get_speed(spi));
+    DPRINT("SPI: bus uses native pins: %s\r\n", spi_lobo_uses_native_pins(spi) ? "true" : "false");
 
     // ================================
     // ==== Initialize the Display ====
 
-    printf("SPI: display init...\r\n");
+    DPRINT("SPI: display init...\r\n");
     TFT_display_init();
-    printf("OK\r\n");
+    DPRINT("OK\r\n");
 
     // ==== Set SPI clock used for display operations ====
     spi_lobo_set_speed(spi, DEFAULT_SPI_CLOCK);
-    printf("SPI: Changed speed to %u\r\n", spi_lobo_get_speed(spi));
+    DPRINT("SPI: Changed speed to %u\r\n", spi_lobo_get_speed(spi));
 
-    printf("\r\n---------------------\r\n");
-    printf("Graphics demo started\r\n");
-    printf("---------------------\r\n");
+    DPRINT("\r\n---------------------\r\n");
+    DPRINT("Graphics demo started\r\n");
+    DPRINT("---------------------\r\n");
 
     font_rotate = 0;
     text_wrap = 0;
@@ -1075,21 +1079,21 @@ static void gpio_task_example(void* arg)
 
         if(fg && val0 == 0 && val1 == 1){
             if(valfg==1){
-                g_count++;
+                gEnCnt++;
             }else{
                 //g_count--;
             }
             fg = 0;
         }else if(fg && val0 == 1 && val1 == 0){
             if(valfg==1){
-                g_count--;
+                gEnCnt--;
             }else{
                // g_count++;
             }
             fg = 0;
         }
-              //printf("GPIO[%d] intr, val: %d\n", io_num, gpio_get_level(io_num));
-                printf("GPIO[%d] , val0=%d, val1=%d, count=%d\n", io_num, val0, val1, g_count);
+              //DPRINT("GPIO[%d] intr, val: %d\n", io_num, gpio_get_level(io_num));
+                DPRINT("GPIO[%d] , val0=%d, val1=%d, count=%d\n", io_num, val0, val1, gEnCnt);
                   //gpio_isr_handler_add(GPIO_INPUT_IO_0, gpio_isr_handler, (void*) GPIO_INPUT_IO_0);
                  //gpio_intr_enable(GPIO_INPUT_IO_0);
 
@@ -1135,7 +1139,7 @@ void calcUIPos2(float pre_x, float pre_y, float angle, float scale, float * pos_
     //まずは、中心からの距離と角度を算出する。
     float dist = sqrt(pre_x*pre_x+pre_y*pre_y);
     float angle1 = atan2(pre_y, pre_x)*180.0/PI;
-    //printf("%f %f %f %f\n",atan2(1, 1),atan2(1, -1),atan2(-1, -1),atan2(-1, 1));
+    //DPRINT("%f %f %f %f\n",atan2(1, 1),atan2(1, -1),atan2(-1, -1),atan2(-1, 1));
     angle2 = angle1+angle; //方位磁針の角度を反映する
     angle2 = fmod(angle2, 360.0);
     //*angle2 = 360 -*angle2;
@@ -1144,15 +1148,15 @@ void calcUIPos2(float pre_x, float pre_y, float angle, float scale, float * pos_
     if(*angle3<0){
             *angle3+=360.0;
     }
-    printf("calcUIPos2 angle=%f angle1=%f, angle2=%f, angle3=%f\n",angle, angle1, angle2, *angle3);
+    DPRINT("calcUIPos2 angle=%f angle1=%f, angle2=%f, angle3=%f\n",angle, angle1, angle2, *angle3);
 
-    //printf(" angle22=%f\n",*angle2);
+    //DPRINT(" angle22=%f\n",*angle2);
     float rate = gDispRadius/(log10(RADAR_MAX_DIST*scale));
 
     *dist2 = log10(dist)*rate;
     *pos_x = *dist2*cos(angle2*PI/180.0)+(dispWin.x2-dispWin.x1)/2.0;
     *pos_y = -1.0*(*dist2)*sin(angle2*PI/180.0)+(dispWin.y2-dispWin.y1)/2.0;
-    //printf("prex=%f, prey=%f, angle=%f, angle2=%f, rate=%f, dist=%f, dist2=%f, posx=%f, posy=%f, log10=%f, disp=%f\n",
+    //DPRINT("prex=%f, prey=%f, angle=%f, angle2=%f, rate=%f, dist=%f, dist2=%f, posx=%f, posy=%f, log10=%f, disp=%f\n",
     //           pre_x, pre_y, angle, *angle2, rate, dist, *dist2, *pos_x,*pos_y, log10(RADAR_MAX_DIST*scale), gDispRadius);
 }
 //end of encoder
@@ -1195,19 +1199,106 @@ void drawObject(t_objInfo *obj, t_objInfo *obj_o){
          calcPlaneDistance(obj->prePosLati-obj_o->prePosLati, obj->prePosLong-obj_o->prePosLong, alt, &x, &y, &z);
          calcUIPos2(x, y, gPreAngle, gPreScale, &posx1, &posy1, &angle1, &dist1);
 //         TFT_drawArc((dispWin.x2-dispWin.x1)/2.0, (dispWin.y2-dispWin.y1)/2.0, dist1, 18, angle1-2, angle1+10, TFT_WHITE, TFT_BLACK);
-         printf("drawObject angle=%f\n",angle1);
+         DPRINT("drawObject angle=%f\n",angle1);
          TFT_drawArc((dispWin.x2-dispWin.x1)/2.0, (dispWin.y2-dispWin.y1)/2.0, dist1+2, 20+2, angle1-1, angle1+13, TFT_BLACK, TFT_BLACK);
     //}
 
 
      calcPlaneDistance(obj->posLati-obj_o->posLati, obj->posLong-obj_o->posLong, alt, &x, &y, &z);
-     printf("draw Object x=%f y=%f, z=%f\n", x, y, z);
+     DPRINT("draw Object x=%f y=%f, z=%f\n", x, y, z);
      calcUIPos(x, y, gAngle, gScale, &posx1, &posy1);
      int backAngle= 360 - gAngle;
      font_rotate = backAngle;
      TFT_print("A", posx1, posy1);
-     font_rotate = 0;
 
+
+
+     //font_rotate = 0;
+     //static const char *file_fonts[3] = {"/spiffs/fonts/DotMatrix_M.fon", "/spiffs/fonts/Ubuntu.fon", "/spiffs/fonts/Grotesk24x48.fon"};
+
+     //TFT_setFont(USER_FONT, file_fonts[0]);
+
+     TFT_jpg_image(CENTER, CENTER, 3, SPIFFS_BASE_PATH"/images/test1.jpg", NULL, 0);
+     //TFT_bmp_image(CENTER, CENTER, 1, SPIFFS_BASE_PATH"/images/tiger.bmp", NULL, 0);
+/*     ESP_LOGI(TAG, "Initializing SPIFFS");
+
+         esp_vfs_spiffs_conf_t conf = {
+           .base_path = "/spiffs",
+           .partition_label = NULL,
+           .max_files = 5,
+           .format_if_mount_failed = true
+         };
+
+         // Use settings defined above to initialize and mount SPIFFS filesystem.
+         // Note: esp_vfs_spiffs_register is an all-in-one convenience function.
+         esp_err_t ret = esp_vfs_spiffs_register(&conf);
+
+         if (ret != ESP_OK) {
+             if (ret == ESP_FAIL) {
+                 ESP_LOGE(TAG, "Failed to mount or format filesystem");
+             } else if (ret == ESP_ERR_NOT_FOUND) {
+                 ESP_LOGE(TAG, "Failed to find SPIFFS partition");
+             } else {
+                 ESP_LOGE(TAG, "Failed to initialize SPIFFS (%d)", ret);
+             }
+             return;
+         }
+
+         size_t total = 0, used = 0;
+         ret = esp_spiffs_info(NULL, &total, &used);
+         if (ret != ESP_OK) {
+             ESP_LOGE(TAG, "Failed to get SPIFFS partition information");
+         } else {
+             ESP_LOGI(TAG, "Partition size: total: %d, used: %d", total, used);
+         }
+
+         // Use POSIX and C standard library functions to work with files.
+         // First create a file.
+         ESP_LOGI(TAG, "Opening file");
+         FILE* f = fopen("/spiffs/hello.txt", "w");
+         if (f == NULL) {
+             ESP_LOGE(TAG, "Failed to open file for writing");
+             return;
+         }
+         fprintf(f, "Hello World!\n");
+         fclose(f);
+         ESP_LOGI(TAG, "File written");
+
+         // Check if destination file exists before renaming
+         struct stat st;
+         if (stat("/spiffs/foo.txt", &st) == 0) {
+             // Delete it if it exists
+             unlink("/spiffs/foo.txt");
+         }
+
+         // Rename original file
+         ESP_LOGI(TAG, "Renaming file");
+         if (rename("/spiffs/hello.txt", "/spiffs/foo.txt") != 0) {
+             ESP_LOGE(TAG, "Rename failed");
+             return;
+         }
+
+         // Open renamed file for reading
+         ESP_LOGI(TAG, "Reading file");
+         f = fopen("/spiffs/foo.txt", "r");
+         if (f == NULL) {
+             ESP_LOGE(TAG, "Failed to open file for reading");
+             return;
+         }
+         char line[64];
+         fgets(line, sizeof(line), f);
+         fclose(f);
+         // strip newline
+         char* pos = strchr(line, '\n');
+         if (pos) {
+             *pos = '\0';
+         }
+         ESP_LOGI(TAG, "Read from file: '%s'", line);
+
+         // All done, unmount partition and disable SPIFFS
+         esp_vfs_spiffs_unregister(NULL);
+         ESP_LOGI(TAG, "SPIFFS unmounted");
+*/
 
 }
 
@@ -1227,7 +1318,7 @@ void drawDisplay(){
     //TFT_fillCircle(x, y, gDispRadius-6, TFT_BLACK);
     //TFT_drawArc((dispWin.x2-dispWin.x1)/2.0, (dispWin.y2-dispWin.y1)/2.0, gDispRadius, 50, 320, 50, TFT_WHITE, TFT_WHITE);
     //TFT_drawArc(x, y, gDispRadius, th, start, end, gBaseColor1, gBaseColor1);
-    //printf("x=%d, y=%d, radius=%f\n", x, y, gDispRadius);
+    //DPRINT("x=%d, y=%d, radius=%f\n", x, y, gDispRadius);
     //headerに自分の情報の更新
     float posx1, posy1, posx2, posy2;
     char buf[20];
@@ -1241,23 +1332,23 @@ void drawDisplay(){
 #if 1
     //drow axis
     //x axis
-    if(gPreAngle!=gAngle){
-        calcUIPos(RADAR_MAX_DIST, 0, gPreAngle, gScale, &posx1, &posy1);
-        calcUIPos(-1.0*RADAR_MAX_DIST, 0, gPreAngle, gScale, &posx2, &posy2);
+    if(gPreAngle!=gAngle || gPreScale!=gScale){
+        calcUIPos(gPreScale*RADAR_MAX_DIST, 0, gPreAngle, gPreScale, &posx1, &posy1);
+        calcUIPos(-1.0*gPreScale*RADAR_MAX_DIST, 0, gPreAngle, gPreScale, &posx2, &posy2);
         TFT_drawLine(posx1,posy1,posx2,posy2,TFT_BLACK);
     }
-    calcUIPos(RADAR_MAX_DIST, 0, gAngle, gScale, &posx1, &posy1);
-    calcUIPos(-1.0*RADAR_MAX_DIST, 0, gAngle, gScale, &posx2, &posy2);
+    calcUIPos(gScale*RADAR_MAX_DIST, 0, gAngle, gScale, &posx1, &posy1);
+    calcUIPos(-1.0*gScale*RADAR_MAX_DIST, 0, gAngle, gScale, &posx2, &posy2);
     TFT_drawLine(posx1,posy1,posx2,posy2,gBaseColor1);
 
     //y axis
-    if(gPreAngle!=gAngle){
-        calcUIPos(0, RADAR_MAX_DIST, gPreAngle, gScale, &posx1, &posy1);
-        calcUIPos(0, -1.0*RADAR_MAX_DIST, gPreAngle, 1, &posx2, &posy2);
+    if(gPreAngle!=gAngle || gPreScale!=gScale){
+        calcUIPos(0, gPreScale*RADAR_MAX_DIST, gPreAngle, gPreScale, &posx1, &posy1);
+        calcUIPos(0, -1.0*gPreScale*RADAR_MAX_DIST, gPreAngle, gPreScale, &posx2, &posy2);
         TFT_drawLine(posx1,posy1,posx2,posy2,TFT_BLACK);
     }
-    calcUIPos(0, RADAR_MAX_DIST, gAngle, gScale, &posx1, &posy1);
-    calcUIPos(0, -1.0*RADAR_MAX_DIST, gAngle, 1, &posx2, &posy2);
+    calcUIPos(0, gScale*RADAR_MAX_DIST, gAngle, gScale, &posx1, &posy1);
+    calcUIPos(0, -1.0*gScale*RADAR_MAX_DIST, gAngle, gScale, &posx2, &posy2);
     TFT_drawLine(posx1,posy1,posx2,posy2,gBaseColor1);
 #endif
 
@@ -1265,15 +1356,17 @@ void drawDisplay(){
     //arrow
     float angle1, dist1;
     //以前の領域をクリアする
-    if(gPreAngle!=gAngle){
-        calcUIPos2(0, 300, gPreAngle, 1.0, &posx1, &posy1, &angle1, &dist1);
-        //printf("angle=%d, angle2=%f\n", backPreAngle, angle2);
+    if(gPreAngle!=gAngle || gPreScale!=gScale){
+        calcUIPos2(0, gPreScale*(RADAR_MAX_DIST-500), gPreAngle, gPreScale, &posx1, &posy1, &angle1, &dist1);
+
+        //DPRINT("angle=%d, angle2=%f\n", backPreAngle, angle2);
+        //dist1 = gDispRadius;
         TFT_drawArc((dispWin.x2-dispWin.x1)/2.0, (dispWin.y2-dispWin.y1)/2.0, dist1+2, 20, angle1-2, angle1+10, TFT_BLACK, TFT_BLACK);
     }
-    calcUIPos(0, 300, gAngle, 1.0, &posx1, &posy1);
-       color_t tmpColor = {.r = 102, .g=250, .b = 102};
+    calcUIPos(0, gScale*(RADAR_MAX_DIST-500), gAngle, gScale, &posx1, &posy1);
+       color_t tmpColor = {.r = 0xb2, .g=0x22, .b = 0x22};
        font_rotate = backAngle;
-       _fg = gBaseColor1;
+       _fg = TFT_RED;
        font_transparent = 0;
        TFT_setFont(DEJAVU18_FONT, NULL);
        TFT_print("N", posx1, posy1);
@@ -1284,21 +1377,42 @@ void drawDisplay(){
 #endif
 
 #if 1
+    Font curr_font = cfont;
+    TFT_setFont(DEFAULT_FONT, NULL);
     //text scale
-    float currentMax = gScale*RADAR_MAX_DIST;
+    float currentMax;
     float scale;
-    int digits = log10(currentMax);
+    int digits;
+    //erase pre image
+    if(gPreScale!=gScale){
+        currentMax=gPreScale*RADAR_MAX_DIST;
+        digits = log10(currentMax);
+        for(i=digits, cnt=0; i>0&&cnt<3; i--, cnt++){
+            scale = pow(10, i);
+            calcUIPos(scale, 0, 0, gPreScale, &posx1, &posy1);
+            TFT_drawCircle((dispWin.x2-dispWin.x1)/2.0,(dispWin.y2-dispWin.y1)/2.0, posx1-(dispWin.x2-dispWin.x1)/2.0, TFT_BLACK);
+            //sprintf(buf,"%0.0fmm\n",scale);
+            //TFT_print(buf, (dispWin.x2-dispWin.x1)/2.0, posx1);
+            TFT_fillRect((dispWin.x2-dispWin.x1)/2.0, posx1, 80, TFT_getfontheight()+2, TFT_BLACK);
+            DPRINT("max=%f digits=%d scale=%f i=%d\n", currentMax, i, scale, i);
+        }
+    }
+
+    currentMax = gScale*RADAR_MAX_DIST;
+    digits = log10(currentMax);
     for(i=digits, cnt=0; i>0&&cnt<3; i--, cnt++){
         scale = pow(10, i);
         calcUIPos(scale, 0, 0, gScale, &posx1, &posy1);
         TFT_drawCircle((dispWin.x2-dispWin.x1)/2.0,(dispWin.y2-dispWin.y1)/2.0, posx1-(dispWin.x2-dispWin.x1)/2.0, gBaseColor1);
         sprintf(buf,"%0.0fmm\n",scale);
           TFT_print(buf, (dispWin.x2-dispWin.x1)/2.0, posx1);
-        printf("max=%f digits=%d scale=%f i=%d\n", currentMax, i, scale, i);
+        DPRINT("max=%f digits=%d scale=%f i=%d\n", currentMax, i, scale, i);
     }
 
-    sprintf(buf,"%0.0fmm\n", gScale*RADAR_MAX_DIST);
-    TFT_print(buf, (dispWin.x2-dispWin.x1)/2.0, (dispWin.y2-dispWin.y1)/2.0+gDispRadius);
+    //sprintf(buf,"%0.0fmm\n", gScale*RADAR_MAX_DIST);
+    //TFT_print(buf, (dispWin.x2-dispWin.x1)/2.0, (dispWin.y2-dispWin.y1)/2.0+gDispRadius);
+
+    cfont = curr_font;
 #endif
 
     //drawObject
@@ -1306,7 +1420,7 @@ void drawDisplay(){
     while (tmp->next != NULL) {
         tmp = tmp->next;
         drawObject(&(tmp->node), &gMyObj);
-        printf("[cnt=%d id=%d] ",cnt, tmp->node.id);
+        DPRINT("[cnt=%d id=%d] ",cnt, tmp->node.id);
     }
 
 /*
@@ -1429,6 +1543,26 @@ void app_main()
     //init tft
     init_tft();
 
+    //init filesystem
+
+    disp_header("File system INIT");
+    _fg = TFT_CYAN;
+    TFT_print("Initializing SPIFFS...", CENTER, CENTER);
+    // ==== Initialize the file system ====
+    printf("\r\n\n");
+    vfs_spiffs_register();
+    if (!spiffs_is_mounted) {
+        _fg = TFT_RED;
+        TFT_print("SPIFFS not mounted !", CENTER, LASTY+TFT_getfontheight()+2);
+    }
+    else {
+        _fg = TFT_GREEN;
+        TFT_print("SPIFFS Mounted.", CENTER, LASTY+TFT_getfontheight()+2);
+    }
+    Wait(-2000);
+
+
+
     //init encoder
     init_encoder();
 
@@ -1468,23 +1602,23 @@ void app_main()
 
 
     while (1) {
-#if 0
+#if 1
         //print current status
-        printf("gMyObj pos_lat=%f pos_long=%f pos_alt=%f angle=%d\n",gMyObj.posLati, gMyObj.posLong, gMyObj.posAlt, gMyObj.angle);
+        DPRINT("gMyObj pos_lat=%f pos_long=%f pos_alt=%f angle=%d\n",gMyObj.posLati, gMyObj.posLong, gMyObj.posAlt, gMyObj.angle);
         //switch test
-        printf("Encoder Switch=%d Buck Switch=%d\n",gpio_get_level(GPIO_INPUT_IO_ES), gpio_get_level(GPIO_INPUT_IO_BS));
+        DPRINT("Encoder Switch=%d Buck Switch=%d\n",gpio_get_level(GPIO_INPUT_IO_ES), gpio_get_level(GPIO_INPUT_IO_BS));
 #endif
 
 #if 0
-        printf("cnt: %d\n", cnt++);
+        DPRINT("cnt: %d\n", cnt++);
    //    vTaskDelay(5000 / portTICK_RATE_MS);
  //       ble_indicate2(cnt);
-        printf("sizeof objInfo=%d\n", sizeof(gMapObj));
+        DPRINT("sizeof objInfo=%d\n", sizeof(gMapObj));
         gPutObj.posLati = gMyObj.posLati;
         gPutObj.posLong = gMyObj.posLong;
         gPutObj.angle = 300;
-        printf("gMyObj  gLati=%f gLong=%f gAngle=%d\n", gMyObj.posLati, gMyObj.posLong, gMyObj.angle);
-        printf("gPutObj  gLati=%f gLong=%f\n", gPutObj.posLati, gPutObj.posLong);
+        DPRINT("gMyObj  gLati=%f gLong=%f gAngle=%d\n", gMyObj.posLati, gMyObj.posLong, gMyObj.angle);
+        DPRINT("gPutObj  gLati=%f gLong=%f\n", gPutObj.posLati, gPutObj.posLong);
         notifyPutObject();
 
         //set angle
@@ -1495,7 +1629,7 @@ void app_main()
 */
 #endif
 
-#if 0
+#if 1
         //update myObj to share angle with browser
         char tmpBuf[11];
         char *bufP = tmpBuf;
@@ -1510,9 +1644,9 @@ void app_main()
 
 
 //comasp
-#if 0
+#if 1
         mpu9250_mag_update(&mpu9250_data);
-        printf("originValues:%03d %03d %03d  magValues: %03d %03d %03d\n",
+        DPRINT("originValues:%03d %03d %03d  magValues: %03d %03d %03d\n",
         mpu9250_mag_get(&mpu9250_data, 1, 0),
         mpu9250_mag_get(&mpu9250_data, 3, 2),
         mpu9250_mag_get(&mpu9250_data, 5, 4),
@@ -1553,12 +1687,17 @@ void app_main()
         gMyObj.angle = (short)gAngle;
 
 
-        printf("compasX=%f, compasY=%f, gAngle=%f\n", compasX, compasY, gAngle);
+        DPRINT("compasX=%f, compasY=%f, gAngle=%f\n", compasX, compasY, gAngle);
 #endif
 //---> compas
 
-
-        //drawDisplay();
+        //update gScale;
+        gPreScale= gScale;
+        gScale = 1.0-0.1*gEnCnt;
+        if(gScale<0.1){
+            gScale= 0.1;
+        }
+        drawDisplay();
 }
 
 

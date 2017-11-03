@@ -60,6 +60,7 @@ extern uint32_t tp_caly;			// touch screen Y calibration constant
 // Total size of the buffer is  2 * (JPG_IMAGE_LINE_BUF_SIZE * 3)
 // The size must be multiple of 256 bytes !!
 #define JPG_IMAGE_LINE_BUF_SIZE 512
+//#define JPG_IMAGE_LINE_BUF_SIZE 128
 
 // --- Constants for ellipse function ---
 #define TFT_ELLIPSE_UPPER_RIGHT 0x01

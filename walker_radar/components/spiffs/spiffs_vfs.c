@@ -246,7 +246,7 @@ static int IRAM_ATTR vfs_spiffs_open(const char *path, int flags, int mode) {
     }
 
     if (result != 0) {
-    	list_remove(&files, fd, 1);
+    	list_remove2(&files, fd, 1);
     	errno = result;
     	return -1;
     }
@@ -392,7 +392,7 @@ static int IRAM_ATTR vfs_spiffs_close(int fd) {
 		return -1;
 	}
 
-	list_remove(&files, fd, 1);
+	list_remove2(&files, fd, 1);
 
 	return 0;
 }
@@ -833,7 +833,7 @@ void vfs_spiffs_register() {
 	}
 
 	esp_vfs_t vfs = {
-        .fd_offset = 0,
+        //.fd_offset = 0, // not available in latest esp-idf
         .flags = ESP_VFS_FLAG_DEFAULT,
         .write = &vfs_spiffs_write,
         .open = &vfs_spiffs_open,

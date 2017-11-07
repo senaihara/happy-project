@@ -33,6 +33,7 @@
     var gCharaMapObj = {};
     var gCharaPutObj = {};
     var gCharaGetObj = {};
+    var gCharaHoldingObjs = {};
     var gDevice = null;
     var gService = {};
     var gMyId = 1;    
@@ -148,6 +149,7 @@
             const CHARA_UUID_MAP_OBJ = 0x2a34;
             const CHARA_UUID_PUT_OBJ = 0x2a35;
             const CHARA_UUID_GET_OBJ = 0x2a36;
+            const CHARA_UUID_HOLDING_OBJS = 0x2a37;
             
             navigator.bluetooth.requestDevice({filters: [{services: [SERVICE_UUID]}]})
             .then(device => {
@@ -237,11 +239,19 @@
                             getid = value.getUint8(0).toString(16);
                             
                             addGetObjToDB(getid);
+                            
+                            //保持しているObj一覧をDBから取得して、Radarに反映する。
+                            updateHoldingObjs();
                        });                       
                         //handleNotifications);
                     });
 
                });
+               
+               service.getCharacteristic(CHARA_UUID_HOLDING_OBJS).then(characteristic => {
+                    gCharaHoldingObjs = characteristic;
+                    log('>holding objs Characteristic UUID:  ' + characteristic.uuid);
+                });
 
             })
             /*
@@ -355,6 +365,12 @@
         $('#get_obj').click(function(){
             addGetObjToDB(1);            
         })
+        
+       //DBから現在保持しているオブジェクト情報を取得                          
+        $('#update_holding_objs').click(function(){
+            updateHoldingObjs();         
+        })
+
 
         $('#ble_disconnect').click(function(){
             alert('disconnect')
@@ -602,6 +618,49 @@
         });
     }
     
+    //レーダーに対して、現在保持しているObj情報の更新を行う。
+    function updateHoldingObjsToRadar(holdingObjs,retryCount){
+        if(gDevice==null || gCharaHoldingObjs == null){
+            log("gDevice or gCharaHodingObjs = null");
+            return;
+        }
+    
+        var sendBuf = new Int8Array(32);
+        
+        for(i=0; i<holdingObjs.length && i<32; i++){
+            sendBuf[i] = holdingObjs[i];
+        }
+        
+        return gCharaHoldingObjs.writeValue(sendBuf)
+       .catch(error => {
+            retryCount--;
+            log("update holdingObjs To Radar retryCount"+retryCount)
+            if (retryCount > 0) {
+                return updateHoldingObjsToRadar(holdingObjs,retryCount);
+            }
+            log("write error");
+            return Promise.reject(error);
+        });   
+    }
+    
+    //レーダーに対して、現在保持しているObj情報の更新を行う。
+    function updateHoldingObjs(){
+        //DBから現在保持しているオブジェクト情報を取得する。
+        $.getJSON('https://160.16.116.250/walker/api/get_holding_objs.php',
+        {holder_id:gMyObj.id})
+        .done(function(data) {
+            //Radarの保持項目リストを更新する。(今のところは、idだけにしましょう)
+            var holdingObjs = [];
+            var len = data.length;
+            //alert("getdata");
+            for(var i = 0; i < len; i++) {
+                log("get holding obj from DB="+data[i].id);
+                holdingObjs.push(data[i].id);
+            }
+            updateHoldingObjsToRadar(holdingObjs, 50);
+        });   
+    }
+
     function handleNotifications(event) {
         let value = event.target.value;
         /*
@@ -758,6 +817,7 @@
     <input type="button" id="update_obj" value="update obj"/><br/>
     <input type="button" id="put_obj" value="put obj"/><br/>
     <input type="button" id="get_obj" value="get obj"/><br/>
+    <input type="button" id="update_holding_objs" value="update holding objs"/><br/>
    
     <form>
         <input id="service" type="text" list="services" autofocus placeholder="Bluetooth Service">

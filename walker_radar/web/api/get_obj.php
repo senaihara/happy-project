@@ -90,7 +90,7 @@ foreach ($stmt as $row) {
 }
 
 //idの項目をget_objectsに更新
-$sql="insert into get_objects (holder_id, id, type, name, pos_lat, pos_long, pos_alt, pos_angle, owner, get_time) 
+$sql="insert into holding_objects (holder_id, id, type, name, pos_lat, pos_long, pos_alt, pos_angle, owner, get_time) 
 values ($holder_id, $objData[id], $objData[type], $objData[name], $objData[pos_lat], $objData[pos_long], $objData[pos_alt], $objData[pos_angle], $objData[owner] , now())
 on duplicate key update holder_id=$holder_id, id=$objData[id], type=$objData[type], name= $objData[name], pos_lat=$objData[pos_lat], pos_long=$objData[pos_long], pos_alt = $objData[pos_alt], pos_angle=$objData[pos_angle], get_time=now()";
 

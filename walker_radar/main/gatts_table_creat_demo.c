@@ -184,19 +184,21 @@ static uint8_t cur_pos_uuid[2] = {0x33, 0x2a};
 static uint8_t map_obj_uuid[2] = {0x34, 0x2a};
 static uint8_t put_obj_uuid[2] = {0x35, 0x2a};
 static uint8_t get_obj_uuid[2] = {0x36, 0x2a};
-
+static uint8_t holding_objs_uuid[2] = {0x37, 0x2a};
 
 static const uint8_t cur_pos_val[11] ={0x00, 0x00, 0x00,0x00, 0x00,0x00, 0x00,0x00, 0x00, 0x00, 0x00};
 static const uint8_t map_obj_val[16] ={0x00,0x00, 0x00,0x00, 0x00,0x00, 0x00,0x00,0x00,0x00, 0x00,0x00, 0x00,0x00, 0x00,0x00};
 //static const uint8_t put_obj_val[10] ={0x00,0x00, 0x00,0x00, 0x00,0x00, 0x00,0x00,0x00,0x00};
 static const uint8_t put_obj_val[10] ={0x00,0x00, 0x00,0x00, 0x00,0x00, 0x00,0x00};
 static const uint8_t get_obj_val[1] ={0x00};
-
+static const uint8_t holding_objs_val[32] ={0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
 
 #define HANDLE_CUR_POS 42
 #define HANDLE_MAP_OBJ 44
 #define HANDLE_PUT_OBJ 46
 #define HANDLE_GET_OBJ 49
+#define HANDLE_HOLDING_OBJS 52
 
 /// Full HRS Database Description - Used to add attributes into the database
 static const esp_gatts_attr_db_t heart_rate_gatt_db[HRS_IDX_NB] =
@@ -231,7 +233,7 @@ static const esp_gatts_attr_db_t heart_rate_gatt_db[HRS_IDX_NB] =
      // sizeof(uint8_t), sizeof(body_sensor_loc_val), (uint8_t *)body_sensor_loc_val}},
     sizeof(map_obj_val),sizeof(map_obj_val), (uint8_t *)map_obj_val}},
 
-    //Put Object Val
+    //Put Object Char
     [HRS_IDX_PUT_OBJ_CHAR]            =
     {{ESP_GATT_AUTO_RSP}, {ESP_UUID_LEN_16, (uint8_t *)&character_declaration_uuid, ESP_GATT_PERM_READ,
       //CHAR_DECLARATION_SIZE,CHAR_DECLARATION_SIZE, (uint8_t *)&char_prop_notify}},
@@ -247,7 +249,7 @@ static const esp_gatts_attr_db_t heart_rate_gatt_db[HRS_IDX_NB] =
          {{ESP_GATT_AUTO_RSP}, {ESP_UUID_LEN_16, (uint8_t *)&character_client_config_uuid, ESP_GATT_PERM_READ|ESP_GATT_PERM_WRITE,
          sizeof(uint16_t),sizeof(heart_measurement_ccc), (uint8_t *)heart_measurement_ccc}},
 
-     //Get Object Val
+     //Get Object Char
      [HRS_IDX_GET_OBJ_CHAR]            =
      {{ESP_GATT_AUTO_RSP}, {ESP_UUID_LEN_16, (uint8_t *)&character_declaration_uuid, ESP_GATT_PERM_READ,
         CHAR_DECLARATION_SIZE,CHAR_DECLARATION_SIZE, (uint8_t *)&char_prop_read_write_notify}},
@@ -256,10 +258,20 @@ static const esp_gatts_attr_db_t heart_rate_gatt_db[HRS_IDX_NB] =
      [HRS_IDX_GET_OBJ_VAL]               =
            {{ESP_GATT_AUTO_RSP}, {sizeof(get_obj_uuid), (uint8_t *)&get_obj_uuid, ESP_GATT_PERM_WRITE|ESP_GATT_PERM_READ,
            sizeof(get_obj_val),sizeof(get_obj_val), (uint8_t *)get_obj_val}},
-     //Put Object Notify config
+     //Get Object Notify config
      [HRS_IDX_GET_OBJ_NTF_CFG]        =
           {{ESP_GATT_AUTO_RSP}, {ESP_UUID_LEN_16, (uint8_t *)&character_client_config_uuid, ESP_GATT_PERM_READ|ESP_GATT_PERM_WRITE,
           sizeof(uint16_t),sizeof(heart_measurement_ccc), (uint8_t *)heart_measurement_ccc}},
+
+      //Holding Objects Char
+       [HRS_IDX_HOLDING_OBJS_CHAR]            =
+       {{ESP_GATT_AUTO_RSP}, {ESP_UUID_LEN_16, (uint8_t *)&character_declaration_uuid, ESP_GATT_PERM_READ,
+          CHAR_DECLARATION_SIZE,CHAR_DECLARATION_SIZE, (uint8_t *)&char_prop_read_write}},
+
+       //Holding Object Value
+       [HRS_IDX_HOLDING_OBJS_VAL]               =
+             {{ESP_GATT_AUTO_RSP}, {sizeof(holding_objs_uuid), (uint8_t *)&holding_objs_uuid, ESP_GATT_PERM_WRITE|ESP_GATT_PERM_READ,
+             sizeof(holding_objs_val),sizeof(holding_objs_val), (uint8_t *)holding_objs_val}},
 };
 
 esp_gatt_if_t gatts_if_for_indicate = ESP_GATT_IF_NONE;
@@ -337,6 +349,7 @@ t_objInfo gMapObj;
 t_objInfo gPutObj;
 t_objInfo gGetObj;
 t_cell gObjList;
+int gHoldingObjIdList[32];
 
 //vector <t_objInfo> gMapObjList;
 
@@ -432,6 +445,19 @@ static void gatts_profile_event_handler(esp_gatts_cb_event_t event,
                     tmpObj.id, tmpObj.posLati, tmpObj.posLong, tmpObj.angle, tmpObj.type, tmpObj.owner, tmpObj.status, tmpObj.enableFg, tmpObj.viewFg);
             updateObjList(&gObjList, tmpObj);
         }
+
+    	    //update holding objss
+        if(param->write.handle==HANDLE_HOLDING_OBJS){
+            esp_ble_gatts_get_attr_value(HANDLE_HOLDING_OBJS,  &length, &p);
+            unsigned char latBuf[4], longBuf[4];
+            //以前の情報のバックアップ
+            for(int i=0; i<length; i++){
+                printf("update holding objs id=%d\n", *p);
+                gHoldingObjIdList[i]=*p;
+                p++;
+            }
+        }
+
       	 	break;
     	case ESP_GATTS_EXEC_WRITE_EVT:
 		break;
@@ -1717,9 +1743,9 @@ void app_main()
 
             preUpdateGATTTime = updateGATTTime;
 
-        notifyPutObject();
+        //notifyPutObject();
         gGetObj.id = 1;
-        notifyGetObject();
+        //notifyGetObject();
         }
 #endif
 

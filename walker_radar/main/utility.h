@@ -1,7 +1,8 @@
-#include <stdio.h>
-
 #ifndef _WALKER_UTILITY_
 #define _WALKER_UTILITY_
+
+#include <stdio.h>
+#include "tftspi.h"
 
 typedef struct {
     int id;
@@ -36,6 +37,8 @@ void printObjList(t_cell *bp);
 void objListTest();
 
 void calcPlaneDistance(float lat, float lon, float alt, float *x, float *y, float*z);
+
+void TFT_jpg_image2(int x, int y, int prex, int prey, uint8_t scale, char *fname, uint8_t *buf, int size);
 
 //#define DEBUG_PRINT
 #ifdef DEBUG_PRINT

@@ -57,8 +57,6 @@
 #include <math.h>
 #include "utility.h"
 
-
-
 #define GATTS_TABLE_TAG "GATTS_TABLE_DEMO"
 
 #define HEART_PROFILE_NUM 			    1
@@ -87,7 +85,6 @@ static uint8_t heart_rate_service_uuid[16] = {
     //first uuid, 16bit, [12],[13] is the value
     0xfb, 0x34, 0x9b, 0x5f, 0x80, 0x00, 0x00, 0x80, 0x00, 0x10, 0x00, 0x00, 0x18, 0x0D, 0x00, 0x00,
 };
-
 
 static esp_ble_adv_data_t heart_rate_adv_config = {
     .set_scan_rsp = false,
@@ -186,16 +183,20 @@ static uint8_t heart_rate_service_uuid2[2] = {
 static uint8_t cur_pos_uuid[2] = {0x33, 0x2a};
 static uint8_t map_obj_uuid[2] = {0x34, 0x2a};
 static uint8_t put_obj_uuid[2] = {0x35, 0x2a};
+static uint8_t get_obj_uuid[2] = {0x36, 0x2a};
+
 
 static const uint8_t cur_pos_val[11] ={0x00, 0x00, 0x00,0x00, 0x00,0x00, 0x00,0x00, 0x00, 0x00, 0x00};
 static const uint8_t map_obj_val[16] ={0x00,0x00, 0x00,0x00, 0x00,0x00, 0x00,0x00,0x00,0x00, 0x00,0x00, 0x00,0x00, 0x00,0x00};
 //static const uint8_t put_obj_val[10] ={0x00,0x00, 0x00,0x00, 0x00,0x00, 0x00,0x00,0x00,0x00};
 static const uint8_t put_obj_val[10] ={0x00,0x00, 0x00,0x00, 0x00,0x00, 0x00,0x00};
+static const uint8_t get_obj_val[1] ={0x00};
+
 
 #define HANDLE_CUR_POS 42
 #define HANDLE_MAP_OBJ 44
 #define HANDLE_PUT_OBJ 46
-
+#define HANDLE_GET_OBJ 49
 
 /// Full HRS Database Description - Used to add attributes into the database
 static const esp_gatts_attr_db_t heart_rate_gatt_db[HRS_IDX_NB] =
@@ -219,15 +220,6 @@ static const esp_gatts_attr_db_t heart_rate_gatt_db[HRS_IDX_NB] =
           //  HRPS_HT_MEAS_MAX_LEN,0, NULL}},
           sizeof(cur_pos_val),sizeof(cur_pos_val), (uint8_t *)cur_pos_val}},
 
-    //{{ESP_GATT_AUTO_RSP}, {ESP_UUID_LEN_16, (uint8_t *)&heart_rate_meas_uuid, ESP_GATT_PERM_READ,
-    //  HRPS_HT_MEAS_MAX_LEN,0, NULL}},
-/*
-    // Heart Rate Measurement Characteristic - Client Characteristic Configuration Descriptor
-    [HRS_IDX_HR_MEAS_NTF_CFG]     	=    
-    {{ESP_GATT_AUTO_RSP}, {ESP_UUID_LEN_16, (uint8_t *)&character_client_config_uuid, ESP_GATT_PERM_READ|ESP_GATT_PERM_WRITE,
-      sizeof(uint16_t),sizeof(heart_measurement_ccc), (uint8_t *)heart_measurement_ccc}},
-*/
-
     // Map Object Char
     [HRS_IDX_MAP_OBJ_CHAR]  =
     {{ESP_GATT_AUTO_RSP}, {ESP_UUID_LEN_16, (uint8_t *)&character_declaration_uuid, ESP_GATT_PERM_READ,
@@ -250,22 +242,24 @@ static const esp_gatts_attr_db_t heart_rate_gatt_db[HRS_IDX_NB] =
           {{ESP_GATT_AUTO_RSP}, {sizeof(put_obj_uuid), (uint8_t *)&put_obj_uuid, ESP_GATT_PERM_WRITE|ESP_GATT_PERM_READ,
           //  HRPS_HT_MEAS_MAX_LEN,0, NULL}},
           sizeof(put_obj_val),sizeof(put_obj_val), (uint8_t *)put_obj_val}},
-
+    //Put Object Notify config
     [HRS_IDX_PUT_OBJ_NTF_CFG]        =
          {{ESP_GATT_AUTO_RSP}, {ESP_UUID_LEN_16, (uint8_t *)&character_client_config_uuid, ESP_GATT_PERM_READ|ESP_GATT_PERM_WRITE,
          sizeof(uint16_t),sizeof(heart_measurement_ccc), (uint8_t *)heart_measurement_ccc}},
 
+     //Get Object Val
+     [HRS_IDX_GET_OBJ_CHAR]            =
+     {{ESP_GATT_AUTO_RSP}, {ESP_UUID_LEN_16, (uint8_t *)&character_declaration_uuid, ESP_GATT_PERM_READ,
+        CHAR_DECLARATION_SIZE,CHAR_DECLARATION_SIZE, (uint8_t *)&char_prop_read_write_notify}},
 
-    // Heart Rate Control Point Characteristic Declaration
-   /* [HRS_IDX_HR_CTNL_PT_CHAR]          =
-    {{ESP_GATT_AUTO_RSP}, {ESP_UUID_LEN_16, (uint8_t *)&character_declaration_uuid, ESP_GATT_PERM_READ,
-      CHAR_DECLARATION_SIZE,CHAR_DECLARATION_SIZE, (uint8_t *)&char_prop_read_write}},
-                                         			
-    // Heart Rate Control Point Characteristic Value
-    [HRS_IDX_HR_CTNL_PT_VAL]             = 
-    {{ESP_GATT_AUTO_RSP}, {ESP_UUID_LEN_16, (uint8_t *)&heart_rate_ctrl_point, ESP_GATT_PERM_WRITE|ESP_GATT_PERM_READ,
-      sizeof(uint8_t), sizeof(heart_ctrl_point), (uint8_t *)heart_ctrl_point}},
-      */
+     // Get Object Value
+     [HRS_IDX_GET_OBJ_VAL]               =
+           {{ESP_GATT_AUTO_RSP}, {sizeof(get_obj_uuid), (uint8_t *)&get_obj_uuid, ESP_GATT_PERM_WRITE|ESP_GATT_PERM_READ,
+           sizeof(get_obj_val),sizeof(get_obj_val), (uint8_t *)get_obj_val}},
+     //Put Object Notify config
+     [HRS_IDX_GET_OBJ_NTF_CFG]        =
+          {{ESP_GATT_AUTO_RSP}, {ESP_UUID_LEN_16, (uint8_t *)&character_client_config_uuid, ESP_GATT_PERM_READ|ESP_GATT_PERM_WRITE,
+          sizeof(uint16_t),sizeof(heart_measurement_ccc), (uint8_t *)heart_measurement_ccc}},
 };
 
 esp_gatt_if_t gatts_if_for_indicate = ESP_GATT_IF_NONE;
@@ -333,31 +327,15 @@ float gScale=1.0;
 float gPreScale=1.0;
 
 color_t gBaseColor1 = {.r = 102, .g=255, .b = 102};
-//gBaseColor1.r = 102;
-//gBaseColor1.g = 255;
-//gBaseColor1.b = 102;
-float
-gDispRadius=0;
+float gDispRadius=0;
 
 #define MEDIAN_BUFFER_LEN 3
 #define MEAN_BUFFER_LEN 5
 
-/*
-typedef struct {
-    int id;
-    float posLati;
-    float posLong;
-    short angle;
-    char type;
-    char owner;
-    char status;
-    char enableFg;
-    char viewFg;
-} t_objInfo;
-*/
 t_objInfo gMyObj;
 t_objInfo gMapObj;
 t_objInfo gPutObj;
+t_objInfo gGetObj;
 t_cell gObjList;
 
 //vector <t_objInfo> gMapObjList;
@@ -630,6 +608,25 @@ static void notifyPutObject() {
 
 }
 
+static void notifyGetObject() {
+    if (gatts_if_for_indicate == ESP_GATT_IF_NONE) {
+        DPRINT("cannot indicate because gatts_if_for_indicate is NONE\n");
+        return;
+    }
+    uint16_t attr_handle = HANDLE_GET_OBJ;
+    uint8_t value_len = 1;
+    int value = 2;
+    uint8_t value_arr[] = { value };
+    uint16_t length = 0;
+    const uint8_t *prf_char;
+    //esp_ble_gatts_get_attr_value(HANDLE_PUT_OBJ,  &length, &prf_char);
+    char tmpBuf[1];
+    char *bufP = tmpBuf;
+    memcpy(bufP, (short*)(&gGetObj.id),1);
+
+    esp_ble_gatts_send_indicate(gatts_if_for_indicate, 0, attr_handle,
+            sizeof(tmpBuf), &tmpBuf, false);
+}
 
 //----------------------
 static void _checkTime()
@@ -1206,7 +1203,7 @@ void calcUIPos(float pre_x, float pre_y, float angle, float scale, float * pos_x
 }
 
 void drawObject(t_objInfo *obj, t_objInfo *obj_o){
-    float x, y,z, alt=0;
+    float x, y,z, prex, prey, alt=0;
     //自分に対してobjの位置を算出する。
     //vector diff = blh2ecef(obj->posLati-myObj->posLati, obj->posLong-myObj->posLong, 0);
 
@@ -1229,33 +1226,38 @@ void drawObject(t_objInfo *obj, t_objInfo *obj_o){
      alt_o=0;
 #endif
      float posx1, posy1, angle1, dist1;
-
+/*
      //if((preBackAngle!=backAngle) || (obj->prePosLati!=obj->posLati) || (obj->prePosLong!=obj->posLong)
         //     ||(obj_o->prePosLati!=obj_o->posLati) || (obj_o->prePosLong!=obj_o->posLong)){
-         calcPlaneDistance(obj->prePosLati-obj_o->prePosLati, obj->prePosLong-obj_o->prePosLong, alt, &x, &y, &z);
-         calcUIPos2(x, y, gPreAngle, gPreScale, &posx1, &posy1, &angle1, &dist1);
+         calcPlaneDistance(obj->prePosLati-obj_o->prePosLati, obj->prePosLong-obj_o->prePosLong, alt, &prex, &prey, &z);
+         calcUIPos2(prex, prey, gPreAngle, gPreScale, &posx1, &posy1, &angle1, &dist1);
 //         TFT_drawArc((dispWin.x2-dispWin.x1)/2.0, (dispWin.y2-dispWin.y1)/2.0, dist1, 18, angle1-2, angle1+10, TFT_WHITE, TFT_BLACK);
          DPRINT("drawObject angle=%f\n",angle1);
          TFT_drawArc((dispWin.x2-dispWin.x1)/2.0, (dispWin.y2-dispWin.y1)/2.0, dist1+2, 20+2, angle1-1, angle1+13, TFT_BLACK, TFT_BLACK);
     //}
-
+         */
+     //前回の位置の計算
+     float preposx, preposy;
+     calcPlaneDistance(obj->prePosLati-obj_o->prePosLati, obj->prePosLong-obj_o->prePosLong, alt, &x, &y, &z);
+     calcUIPos(x, y, gPreAngle, gPreScale, &preposx, &preposy);
 
      calcPlaneDistance(obj->posLati-obj_o->posLati, obj->posLong-obj_o->posLong, alt, &x, &y, &z);
      DPRINT("draw Object x=%f y=%f, z=%f\n", x, y, z);
      calcUIPos(x, y, gAngle, gScale, &posx1, &posy1);
-
+/*
      int backAngle= 360 - gAngle;
      int pre_font_rotate = font_rotate;
      font_rotate = backAngle;
      TFT_print("A", posx1, posy1);
      font_rotate = pre_font_rotate;
-
+*/
      //font_rotate = 0;
      //static const char *file_fonts[3] = {"/spiffs/fonts/DotMatrix_M.fon", "/spiffs/fonts/Ubuntu.fon", "/spiffs/fonts/Grotesk24x48.fon"};
 
      //TFT_setFont(USER_FONT, file_fonts[0]);
 
-     //TFT_jpg_image(CENTER, CENTER, 3, SPIFFS_BASE_PATH"/images/test1.jpg", NULL, 0);
+     TFT_jpg_image2(posx1, posy1, preposx, preposy, 1, SPIFFS_BASE_PATH"/images/kuro.jpg", NULL, 0);
+
      //TFT_bmp_image(CENTER, CENTER, 1, SPIFFS_BASE_PATH"/images/tiger.bmp", NULL, 0);
 /*     ESP_LOGI(TAG, "Initializing SPIFFS");
 
@@ -1715,6 +1717,9 @@ void app_main()
 
             preUpdateGATTTime = updateGATTTime;
 
+        notifyPutObject();
+        gGetObj.id = 1;
+        notifyGetObject();
         }
 #endif
 
@@ -1775,9 +1780,6 @@ void app_main()
             gScale= 0.1;
         }
         drawDisplay();
-}
-
-
-
+    }
     return;
 }

@@ -32,6 +32,7 @@
     var gCharaCurPos = {};
     var gCharaMapObj = {};
     var gCharaPutObj = {};
+    var gCharaGetObj = {};
     var gDevice = null;
     var gService = {};
     var gMyId = 1;    
@@ -146,6 +147,8 @@
             const CHARA_UUID_CUR_POS = 0x2a33;
             const CHARA_UUID_MAP_OBJ = 0x2a34;
             const CHARA_UUID_PUT_OBJ = 0x2a35;
+            const CHARA_UUID_GET_OBJ = 0x2a36;
+            
             navigator.bluetooth.requestDevice({filters: [{services: [SERVICE_UUID]}]})
             .then(device => {
                 log('Connecting to GATT Server...');
@@ -171,22 +174,9 @@
                     log('> Characteristic UUID:  ' + characteristic.uuid);
                 });
                 
-               return service.getCharacteristic(CHARA_UUID_PUT_OBJ).then(characteristic => {
+               service.getCharacteristic(CHARA_UUID_PUT_OBJ).then(characteristic => {
                     gCharaPutObj = characteristic;
-                log('> Characteristic UUID:  ' + characteristic.uuid);
-                log('> Broadcast:            ' + characteristic.properties.broadcast);
-                log('> Read:                 ' + characteristic.properties.read);
-                log('> Write w/o response:   ' +
-                      characteristic.properties.writeWithoutResponse);
-                log('> Write:                ' + characteristic.properties.write);
-                log('> Notify:               ' + characteristic.properties.notify);
-                log('> Indicate:             ' + characteristic.properties.indicate);
-                log('> Signed Write:         ' +
-                      characteristic.properties.authenticatedSignedWrites);
-                log('> Queued Write:         ' + characteristic.properties.reliableWrite);
-                log('> Writable Auxiliaries: ' +
-                      characteristic.properties.writableAuxiliaries);
-  
+                    //Radarから書き込みnotify通知を受けた際の処理 
                     return gCharaPutObj.startNotifications().then(_ => {
                         log('> Notifications started');
                         gCharaPutObj.addEventListener('characteristicvaluechanged',
@@ -223,6 +213,30 @@
                             putObj.owner = value.getUint8(9).toString(16);
                             
                             putObjToDB(putObj);
+                       });                       
+                        //handleNotifications);
+                    });
+
+               });
+               
+               service.getCharacteristic(CHARA_UUID_GET_OBJ).then(characteristic => {
+                    gCharaGetObj = characteristic;
+                    //Radarから書き込みnotify通知を受けた際の処理 
+                    return gCharaGetObj.startNotifications().then(_ => {
+                        log('> GetObj Notifications started');
+                        gCharaGetObj.addEventListener('characteristicvaluechanged',
+                        function(event){
+                            let value = event.target.value;
+                            let a = [];
+                            for (let i = 0; i < value.byteLength; i++) {
+                                //a.push('0x' + ('00' + value.getUint8(i).toString(16)).slice(-2));
+                                a.push(value.getUint8(i).toString(16));
+                            }
+                            log('getobj notify ' + a.join(' '));
+                            
+                            getid = value.getUint8(0).toString(16);
+                            
+                            addGetObjToDB(getid);
                        });                       
                         //handleNotifications);
                     });
@@ -280,7 +294,7 @@
             updateInfo();
         })
 
-        //オブジェクトの追加                          
+        //オブジェクトの更新                          
         $('#update_obj').click(function(){
         
             updateObjs();
@@ -325,7 +339,23 @@
             
             return;
         })
-  
+        
+        //DBへのオブジェクトの追加                          
+        $('#put_obj').click(function(){
+            var putObj = new WalkerObj();
+            putObj.posLat = 1;
+            putObj.posLong = 2;
+            putObj.type = -1;
+            putObj.owner = -1;
+            putObjToDB(putObj);
+            return;
+        })
+        
+        //DBへの取得オブジェクトの追加                          
+        $('#get_obj').click(function(){
+            addGetObjToDB(1);            
+        })
+
         $('#ble_disconnect').click(function(){
             alert('disconnect')
             gDevice.gatt.disconnect()
@@ -551,13 +581,27 @@
         {pos_lat:walkerObj.posLat, pos_long:walkerObj.posLong, pos_alt:0, type:walkerObj.type, owner:walkerObj.owner})
         .done(function(data) {
             var len = data.length;
-            alert("getdata");
+            //alert("getdata");
             for(var i = 0; i < len; i++) {
                 log("get data="+data[i].result);
             }
         });
     }
-     
+    
+    //DBに対して取得objectを追加する
+    function addGetObjToDB(objId){
+        //DBに対して取得objIDの通知
+        $.getJSON('https://160.16.116.250/walker/api/get_obj.php',
+        {holder_id:gMyObj.id, obj_id:objId})
+        .done(function(data) {
+            var len = data.length;
+            //alert("getdata");
+            for(var i = 0; i < len; i++) {
+                log("get obj to DB="+data[i].result);
+            }
+        });
+    }
+    
     function handleNotifications(event) {
         let value = event.target.value;
         /*
@@ -712,6 +756,8 @@
     <input type="button" id="update_pos" value="update pos"/><br/>
     <input type="button" id="read_angle" value="read angle"/><br/>
     <input type="button" id="update_obj" value="update obj"/><br/>
+    <input type="button" id="put_obj" value="put obj"/><br/>
+    <input type="button" id="get_obj" value="get obj"/><br/>
    
     <form>
         <input id="service" type="text" list="services" autofocus placeholder="Bluetooth Service">

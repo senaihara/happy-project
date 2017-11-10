@@ -1,0 +1,847 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset=utf-8>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0, user-scalable=yes">
+  <title>walker_radar</title>
+
+<script type="text/javascript" src="https://ajax.googleapis.com/ajax/libs/jquery/1.10.1/jquery.min.js"></script>
+<script src="https://maps.googleapis.com/maps/api/js?callback=initMap" async defer></script>
+<script>
+    //オブジェクトクラス定義
+    class WalkerObj {
+        constructor(id=0, posLat=0, posLong=0, posAlt=0, angle=0, type=0, owner=0, statusFg=0, enableFg=1, viewFg=1, deleteFg=0){
+            this.id = id;
+            this.posLat = posLat;
+            this.posLong = posLong;
+            this.posAlt = posAlt;
+            this.angle = angle;
+            this.type = type;
+            this.owner = owner;
+            this.statusFg = statusFg;
+            this.enableFg = enableFg;
+            this.viewFg = viewFg;
+            this.deleteFg = deleteFg;
+        }
+        
+        print(){
+            log("id="+this.id);
+        }
+    }
+
+    var gCharaCurPos = {};
+    var gCharaMapObj = {};
+    var gCharaPutObj = {};
+    var gCharaGetObj = {};
+    var gCharaHoldingObjs = {};
+    var gDevice = null;
+    var gService = {};
+    var gMyId = 1;    
+    var gGattModeFg=0;
+    var gMyObj = new WalkerObj();
+    gMyObj.id = 1;
+    var gObjList = new Array();
+    var gCount=1;
+    var gAccuracy=0;
+    var gMapObj=null;
+    var gMarkerArray;// = new google.maps.MVCArray();
+    var gTimerSwitch = true;
+     
+    function initMap() {             // google maps Javascript と同期
+        if (navigator.geolocation) {   // 現在の位置情報を取得する
+        
+            navigator.geolocation.watchPosition(successCallback, errorCallback,
+            {                 // 位置取得オプション
+            "enableHighAccuracy":true,
+            "timeout":8000,
+            "maximumAge":0,
+            });
+        } else {
+          alert('navigator.geolocation は利用出来ません');
+        }
+    
+       gMarkerArray = new google.maps.MVCArray()
+    }; //  initMap()  --------------
+    
+    //画面への表示情報の更新
+    function updateInfo(){
+        var g_txt ="count=" +gCount+ " id:"+gMyObj.id+"<br>"+"lati：" + gMyObj.pos_lat;
+        g_txt += " long：" + gMyObj.pos_long + "<br>";
+        g_txt += "angle：" + gMyObj.angle + "<br>";  
+        g_txt += "alt：" + gMyObj.pos_alt + " m<br>";
+        g_txt += "accuracy：" + gAccuracy + " m<br>";
+        document.getElementById("txt_result").innerHTML = g_txt; // 位置の書き出し
+        gCount+=1;
+        
+        var latlng = new google.maps.LatLng( gMyObj.pos_lat,gMyObj.pos_long );        // 地図の中心
+        var marker = new google.maps.Marker( { map:gMapObj , position:latlng } );  // マーカーセット
+        //一旦マーカーをクリア
+        gMarkerArray.forEach(function (marker, idx) { marker.setMap(null); }); 
+        
+        gMarkerArray.push(marker);
+        if(gMapObj!=null){
+            gMapObj.panTo(latlng);
+        }
+    }
+    
+      // 現在の位置情報を取得時の処置  ------------------
+    function successCallback(position) {
+        gMyObj.pos_lat = position.coords.latitude.toFixed(5);
+        gMyObj.pos_long = position.coords.longitude.toFixed(5);
+        gMyObj.pos_alt = position.coords.altitude;
+        if(gMyObj.pos_alt == null) gMyObj.pos_alt = 0;
+            gAccuracy=position.coords.accuracy;
+        // Google Mapsに書き出し ------------------
+        var latlng = new google.maps.LatLng( gMyObj.pos_lat,gMyObj.pos_long );        // 地図の中心
+        
+        if(gMapObj==null){
+            gMapObj = new google.maps.Map( document.getElementById('gmap'), {
+            zoom: 15 ,
+            center:latlng
+            });
+        }
+        
+        //画面情報の更新
+        updateInfo();
+      }; //  successCallback(position) ---------------
+ 
+      // 位置情報が取得できない場合の処置 ---------------
+    function errorCallback(error) {
+        var err_msg = "";
+        switch(error.code){
+          case 0:
+            err_msg = "原因不明のエラーが発生しました";
+            break;
+          case 1:
+            err_msg = "位置情報の利用が許可されていません";
+            break;
+          case 2:
+            err_msg = "デバイスの位置が取得できません";
+            break;
+          case 3:
+            err_msg = "タイムアウトしました";
+            break;
+        }
+        document.getElementById("txt_result").innerHTML = err_msg;
+      }; //  errorCallback(error) ----------------------
+
+    $(function() {
+        //initialize
+        //初期設定
+        gMyObj.id = 1;
+        
+        setInterval(function(){
+            if(gTimerSwitch){
+                if(gGattModeFg%2==0){
+                    updateCurPosAll();
+                }else if(gGattModeFg%2==1){
+                    getRadarAngleFromRadar(50);
+                }
+                updateInfo();
+                gGattModeFg+=1;
+            }
+        },2000);
+        
+        $('#ble_connect').click(function(){
+           //alert('connect')
+            const SERVICE_UUID =0x0d18;
+            const CHARA_UUID_CUR_POS = 0x2a33;
+            const CHARA_UUID_MAP_OBJ = 0x2a34;
+            const CHARA_UUID_PUT_OBJ = 0x2a35;
+            const CHARA_UUID_GET_OBJ = 0x2a36;
+            const CHARA_UUID_HOLDING_OBJS = 0x2a37;
+            
+            navigator.bluetooth.requestDevice({filters: [{services: [SERVICE_UUID]}]})
+            .then(device => {
+                log('Connecting to GATT Server...');
+                gDevice = device;
+                return device.gatt.connect();
+            })
+            .then(server => {
+                log('Getting Service...');
+                return server.getPrimaryService(SERVICE_UUID);
+            })
+            .then(service => {
+                gService = service;
+                log('Getting Characteristic...');
+                
+                service.getCharacteristic(CHARA_UUID_CUR_POS).then(characteristic => {
+                    gCharaCurPos = characteristic;    
+                    log('> Characteristic UUID:  ' + characteristic.uuid);
+                
+                });
+                
+                service.getCharacteristic(CHARA_UUID_MAP_OBJ).then(characteristic => {
+                    gCharaMapObj = characteristic;
+                    log('> Characteristic UUID:  ' + characteristic.uuid);
+                });
+                
+               service.getCharacteristic(CHARA_UUID_PUT_OBJ).then(characteristic => {
+                    gCharaPutObj = characteristic;
+                    //Radarから書き込みnotify通知を受けた際の処理 
+                    return gCharaPutObj.startNotifications().then(_ => {
+                        log('> Notifications started');
+                        gCharaPutObj.addEventListener('characteristicvaluechanged',
+                        function(event){
+                            let value = event.target.value;
+                            let a = [];
+                            for (let i = 0; i < value.byteLength; i++) {
+                                //a.push('0x' + ('00' + value.getUint8(i).toString(16)).slice(-2));
+                                a.push(value.getUint8(i).toString(16));
+                            }
+                            log('> notify ' + a.join(' '));
+                            
+                            var buffer = new ArrayBuffer(4);
+                            
+                            var dataView = new DataView(buffer);
+                            dataView.setUint8(0, parseInt(value.getUint8(0).toString(16),16));
+                            dataView.setUint8(1, parseInt(value.getUint8(1).toString(16),16));
+                            dataView.setUint8(2, parseInt(value.getUint8(2).toString(16),16));
+                            dataView.setUint8(3, parseInt(value.getUint8(3).toString(16),16));
+                            var putObjLati = dataView.getFloat32(0, true);
+                            
+                            dataView.setUint8(0, parseInt(value.getUint8(4).toString(16),16));
+                            dataView.setUint8(1, parseInt(value.getUint8(5).toString(16),16));
+                            dataView.setUint8(2, parseInt(value.getUint8(6).toString(16),16));
+                            dataView.setUint8(3, parseInt(value.getUint8(7).toString(16),16));
+                            var putObjLong = dataView.getFloat32(0, true);
+                              
+                            log("covert pos lati="+putObjLati+" long="+putObjLong+ " type="
+                            +value.getUint8(8).toString(16)+" owner="+value.getUint8(9).toString(16));
+                            var putObj = new WalkerObj();
+                            putObj.posLat = putObjLati;
+                            putObj.posLong = putObjLong;
+                            putObj.type = value.getUint8(8).toString(16);
+                            putObj.owner = value.getUint8(9).toString(16);
+                            
+                            putObjToDB(putObj);
+                       });                       
+                        //handleNotifications);
+                    });
+
+               });
+               
+               service.getCharacteristic(CHARA_UUID_GET_OBJ).then(characteristic => {
+                    gCharaGetObj = characteristic;
+                    //Radarから書き込みnotify通知を受けた際の処理 
+                    return gCharaGetObj.startNotifications().then(_ => {
+                        log('> GetObj Notifications started');
+                        gCharaGetObj.addEventListener('characteristicvaluechanged',
+                        function(event){
+                            let value = event.target.value;
+                            let a = [];
+                            for (let i = 0; i < value.byteLength; i++) {
+                                //a.push('0x' + ('00' + value.getUint8(i).toString(16)).slice(-2));
+                                a.push(value.getUint8(i).toString(16));
+                            }
+                            log('getobj notify ' + a.join(' '));
+                            
+                            getid = value.getUint8(0).toString(16);
+                            
+                            addGetObjToDB(getid);
+                            
+                            //保持しているObj一覧をDBから取得して、Radarに反映する。
+                            updateHoldingObjs();
+                       });                       
+                        //handleNotifications);
+                    });
+
+               });
+               
+               service.getCharacteristic(CHARA_UUID_HOLDING_OBJS).then(characteristic => {
+                    gCharaHoldingObjs = characteristic;
+                    log('>holding objs Characteristic UUID:  ' + characteristic.uuid);
+                });
+
+            })
+            /*
+           .then(characteristic => {
+                log('> Characteristic UUID:  ' + characteristic.uuid);
+                log('> Broadcast:            ' + characteristic.properties.broadcast);
+                log('> Read:                 ' + characteristic.properties.read);
+                log('> Write w/o response:   ' +
+                      characteristic.properties.writeWithoutResponse);
+                log('> Write:                ' + characteristic.properties.write);
+                log('> Notify:               ' + characteristic.properties.notify);
+                log('> Indicate:             ' + characteristic.properties.indicate);
+                log('> Signed Write:         ' +
+                      characteristic.properties.authenticatedSignedWrites);
+                log('> Queued Write:         ' + characteristic.properties.reliableWrite);
+                log('> Writable Auxiliaries: ' +
+                      characteristic.properties.writableAuxiliaries);
+  
+                gCharaCurPos = characteristic;
+                //return gCharaCurPos.startNotifications().then(_ => {
+                //    log('> Notifications started');
+                //    gCharacteristic.addEventListener('characteristicvaluechanged',
+                //    handleNotifications);
+                //});
+            })*/
+        })
+  
+        $('#ble_read_test').click(function(){
+            alert("read test");
+            gCharacteristic.readValue()
+            .then((val) => {
+                let ble_value = val.getUint8(0)
+                log('> Characteristic value:  ' + ble_value)               
+            })
+        })
+        
+        $('#ble_write_test').click(function(){
+     alert("write test");
+                    var barr = new Int8Array(1);
+                    barr[0]=2;
+                      gCharacteristic.writeValue(barr);  
+     
+                       
+    
+                                            })
+   
+	//自分の座標位置の更新                          
+        $('#update_pos').click(function(){
+            updateCurPosAll(50);
+            updateInfo();
+        })
+
+        //オブジェクトの更新                          
+        $('#update_obj').click(function(){
+        
+            updateObjs();
+            return;
+            
+            var f1 = new Float32Array(1);
+            f1[0] = gMyObj.pos_lati;
+            var arrayLati = new Int8Array(f1.buffer)
+          
+            var f2 = new Float32Array(1);
+            f2[0] = gLMyObj.pos_long;
+            var arrayLong = new Int8Array(f2.buffer);
+            
+            var d1 = new Int16Array(1);
+            d1[0] = 300;
+            var arrayAngle = new Int8Array(d1.buffer);
+            
+            //id[1],lat[4],long[4],angle[2],type[1],owner[1],status[1],enableFg[1],viewFg[1]
+                     
+            var sendBuf = new Int8Array(16);
+            sendBuf[0] = gCount;
+            gCount++;
+            sendBuf[1] = arrayLati[0];
+            sendBuf[2] = arrayLati[1];
+            sendBuf[3] = arrayLati[2];
+            sendBuf[4] = arrayLati[3];
+            sendBuf[5] = arrayLong[0];
+            sendBuf[6] = arrayLong[1];
+            sendBuf[7] = arrayLong[2];
+            sendBuf[8] = arrayLong[3];
+            sendBuf[9] = arrayAngle[0];
+            sendBuf[10] = arrayAngle[1];
+            sendBuf[11] = 1;//type
+            sendBuf[12] = 2;//owner
+            sendBuf[13] = 3;//status
+            sendBuf[14] = 4;//enableFg
+            sendBuf[15] = 5;//viewFg
+            
+            log("update obj sendBuf "+sendBuf);
+            gCharaMapObj.writeValue(sendBuf).then(_ => {
+            });
+            
+            return;
+        })
+        
+        //DBへのオブジェクトの追加                          
+        $('#put_obj').click(function(){
+            var putObj = new WalkerObj();
+            putObj.posLat = 1;
+            putObj.posLong = 2;
+            putObj.type = -1;
+            putObj.owner = -1;
+            putObjToDB(putObj);
+            return;
+        })
+        
+        //DBへの取得オブジェクトの追加                          
+        $('#get_obj').click(function(){
+            addGetObjToDB(1);            
+        })
+        
+       //DBから現在保持しているオブジェクト情報を取得                          
+        $('#update_holding_objs').click(function(){
+            updateHoldingObjs();         
+        })
+
+
+        $('#ble_disconnect').click(function(){
+            alert('disconnect')
+            gDevice.gatt.disconnect()
+            gDevice = null;
+        })
+        
+        $('#timer_switch').click(function(){
+            if(gTimerSwitch){
+                $('#timer_switch').val('timer switch off');
+            }else{
+                $('#timer_switch').val('timer switch on');
+            }
+            gTimerSwitch =  !gTimerSwitch;
+        })
+         $('#read_angle').click(function(){
+          
+            getRadarAngleFromRadar(1);
+            updateInfo(); 
+            
+            return;
+        }) 
+        $('#test').click(function(){
+          
+            //putObjToDB(gMyObj);
+            //getRadarAngleFromRadar(50);
+            updateCurPos2Radar(20);
+            updateInfo(); 
+            
+            return;
+        }) 
+    });
+    //jQuery end
+    
+    //Radarへの現在位置の更新
+    function updateCurPos2Radar(retryCount){
+        if(gDevice==null || gCharaCurPos == null || gCharaCurPos==null){
+            log("gDevice or gCharaCurPos = null");
+            return;
+        }
+       /* 
+        //先に角度を取得する
+        gCharaCurPos.readValue()
+        .then((val) => {
+            var buffer = new ArrayBuffer(2);
+            var dataView = new DataView(buffer);
+            dataView.setUint8(0, parseInt(val.getUint8(9).toString(16),16));
+            dataView.setUint8(1, parseInt(val.getUint8(10).toString(16),16));
+            gMyObj.angle = dataView.getUint16(0, true);
+            //log("gMyObj.angle="+gMyObj.angle);
+        })
+        */
+        var f1 = new Float32Array(1);
+        f1[0] = gMyObj.pos_lat;
+        //log(gMyObj.pos_lat+" "+f1[0])  
+        var arrayLati = new Int8Array(f1.buffer)
+      
+        var f2 = new Float32Array(1);
+        f2[0] = gMyObj.pos_long;
+        var tmpArray = []
+        //log(gMyObj.ps_long+" "+f2[0])
+        var arrayLong = new Int8Array(f2.buffer);
+                 
+        var sendBuf = new Int8Array(9);
+        sendBuf[0] = gMyId;
+        sendBuf[1] = arrayLati[0];
+        sendBuf[2] = arrayLati[1];
+        sendBuf[3] = arrayLati[2];
+        sendBuf[4] = arrayLati[3];
+        sendBuf[5] = arrayLong[0];
+        sendBuf[6] = arrayLong[1];
+        sendBuf[7] = arrayLong[2];
+        sendBuf[8] = arrayLong[3];
+        
+        gCharaCurPos.writeValue(sendBuf)
+        .catch(error => {
+            retryCount--;
+            log("retryCount"+retryCount)
+            if (retryCount > 0) {
+                return updateCurPos2Radar(retryCount);
+            }
+            log("write error");
+            return Promise.reject(error);
+        });
+    }
+    
+    function getRadarAngleFromRadar(retryCount){
+        if(gDevice==null || gCharaCurPos == null){
+            log("gDevice or gCharaCurPos = null");
+            return;
+        }
+        gCharaCurPos.readValue()
+        .then((val) => {
+            var buffer = new ArrayBuffer(2);
+            var dataView = new DataView(buffer);
+            dataView.setUint8(0, parseInt(val.getUint8(9).toString(16),16));
+            dataView.setUint8(1, parseInt(val.getUint8(10).toString(16),16));
+            gMyObj.angle = dataView.getUint16(0, true);
+            //log("gMyObj.angle="+gMyObj.angle);
+        })
+        .catch(error => {
+            retryCount--;
+            log("getRadarAngle retryCount"+retryCount)
+            if (retryCount > 0) {
+                return getRadarAngleFromRadar(retryCount);
+            }
+            log("read radapos error.");
+            return Promise.reject(error);
+        });
+    }
+    
+    function updateCurPosAll(){ 
+        //Radarへの現在位置の更新
+        updateCurPos2Radar(50);
+        
+        if(gMyObj.pos_lat==null || gMyObj.pos_long == null || gMyObj.angle==null){
+            log("gMyObj not initialized");
+             return;
+        }
+        
+        //サーバへの現在位置の更新 
+        $.getJSON('https://160.16.116.250/walker/api/update_cur_pos.php',
+        {id:gMyId, pos_lat:gMyObj.pos_lat, pos_long:gMyObj.pos_long, pos_alt:gMyObj.pos_alt, pos_angle:gMyObj.angle })
+        .done(function(data) {
+            var len = data.length;
+            for(var i = 0; i < len; i++) {
+                log("update_cur_pos.php resul="+data[i].result);
+            }
+        });  
+        
+        //画面情報の更新
+        //updateInfo();
+    }
+    
+    //Radarへのオブジェクトの更新
+    function updataObjs2Radar(walkerObj, retryCount){
+        var f1 = new Float32Array(1);
+        f1[0] = walkerObj.posLat;
+        var arrayLati = new Int8Array(f1.buffer)
+      
+        var f2 = new Float32Array(1);
+        f2[0] = walkerObj.posLong;
+        var arrayLong = new Int8Array(f2.buffer);
+        
+        var d1 = new Int16Array(1);
+        d1[0] = walkerObj.angle;
+        var arrayAngle = new Int8Array(d1.buffer);
+        
+        //id[1],lat[4],long[4],angle[2],type[1],owner[1],status[1],enableFg[1],viewFg[1]
+                 
+        var sendBuf = new Int8Array(16);
+        sendBuf[0] = walkerObj.id;
+        sendBuf[1] = arrayLati[0];
+        sendBuf[2] = arrayLati[1];
+        sendBuf[3] = arrayLati[2];
+        sendBuf[4] = arrayLati[3];
+        sendBuf[5] = arrayLong[0];
+        sendBuf[6] = arrayLong[1];
+        sendBuf[7] = arrayLong[2];
+        sendBuf[8] = arrayLong[3];
+        sendBuf[9] = arrayAngle[0];
+        sendBuf[10] = arrayAngle[1];
+        sendBuf[11] = walkerObj.type;//type
+        sendBuf[12] = walkerObj.owner;//owner
+        sendBuf[13] = walkerObj.statusFg;//status
+        sendBuf[14] = walkerObj.enableFg;//enableFg
+        sendBuf[15] = walkerObj.viewFg;//viewFg
+        
+        //log("update obj sendBuf "+sendBuf);
+        return gCharaMapObj.writeValue(sendBuf)
+       .catch(error => {
+            retryCount--;
+            log("retryCount"+retryCount)
+            if (retryCount > 0) {
+                return updataObjs2Radar(walkerObj, retryCount);
+            }
+            log("write error");
+            return Promise.reject(error);
+        });   
+    }
+    
+    //オブジェクトの更新(DBからobjectを取得してRadarに更新する)
+    function updateObjs(){
+        //DBからオブジェクトの受信
+        //サーバへの現在位置の更新 
+        $.getJSON('https://160.16.116.250/walker/api/search_objs.php',
+        {id:gMyObj.id})
+        .done(function(data) {
+            //alert('getdata')
+            var len = data.length;
+            log("search_obj.php len="+len);
+            for(var i = 0; i < len; i++) {
+                tmpObj = new WalkerObj(data[i].id, data[i].pos_lat, data[i].pos_long, data[i].pos_alt, data[i].angle, data[i].type, data[i].owner, data[i].status_fg, data[i].enable_fg, data[i].delete_fg);
+                
+                //check existance
+                var fg = 0;
+                for(var j=0; j<gObjList.length; j++){
+                    if(gObjList[j].id == tmpObj.id){
+                        fg = 1;
+                        break;
+                    }
+                }
+                //if find continue;
+                if(fg){
+                    continue;
+                }
+                gObjList.push(tmpObj);
+            }
+        }); 
+        
+        //radarへの更新処理
+        for(var i = 0; i < gObjList.length; i++) {
+            updataObjs2Radar(gObjList[i], 50);
+        }
+    }
+    
+    //DBに対してobjの配置を行う
+    function putObjToDB(walkerObj){
+        //DBからオブジェクトの受信
+        //サーバへの現在位置の更新
+        // $.getJSON('https://160.16.116.250/walker/api/update_cur_pos.php',
+        //{id:gMyId, pos_lat:gMyObj.pos_lat, pos_long:gMyObj.pos_long, pos_alt:gMyObj.pos_alt, pos_angle:gMyObj.angle })
+        $.getJSON('https://160.16.116.250/walker/api/put_obj.php',
+        {pos_lat:walkerObj.posLat, pos_long:walkerObj.posLong, pos_alt:0, type:walkerObj.type, owner:walkerObj.owner})
+        .done(function(data) {
+            var len = data.length;
+            //alert("getdata");
+            for(var i = 0; i < len; i++) {
+                log("get data="+data[i].result);
+            }
+        });
+    }
+    
+    //DBに対して取得objectを追加する
+    function addGetObjToDB(objId){
+        //DBに対して取得objIDの通知
+        $.getJSON('https://160.16.116.250/walker/api/get_obj.php',
+        {holder_id:gMyObj.id, obj_id:objId})
+        .done(function(data) {
+            var len = data.length;
+            //alert("getdata");
+            for(var i = 0; i < len; i++) {
+                log("get obj to DB="+data[i].result);
+            }
+        });
+    }
+    
+    //レーダーに対して、現在保持しているObj情報の更新を行う。
+    function updateHoldingObjsToRadar(holdingObjs,retryCount){
+        if(gDevice==null || gCharaHoldingObjs == null){
+            log("gDevice or gCharaHodingObjs = null");
+            return;
+        }
+    
+        var sendBuf = new Int8Array(32);
+        
+        for(i=0; i<holdingObjs.length && i<32; i++){
+            sendBuf[i] = holdingObjs[i];
+        }
+        
+        return gCharaHoldingObjs.writeValue(sendBuf)
+       .catch(error => {
+            retryCount--;
+            log("update holdingObjs To Radar retryCount"+retryCount)
+            if (retryCount > 0) {
+                return updateHoldingObjsToRadar(holdingObjs,retryCount);
+            }
+            log("write error");
+            return Promise.reject(error);
+        });   
+    }
+    
+    //レーダーに対して、現在保持しているObj情報の更新を行う。
+    function updateHoldingObjs(){
+        //DBから現在保持しているオブジェクト情報を取得する。
+        $.getJSON('https://160.16.116.250/walker/api/get_holding_objs.php',
+        {holder_id:gMyObj.id})
+        .done(function(data) {
+            //Radarの保持項目リストを更新する。(今のところは、idだけにしましょう)
+            var holdingObjs = [];
+            var len = data.length;
+            //alert("getdata");
+            for(var i = 0; i < len; i++) {
+                log("get holding obj from DB="+data[i].id);
+                holdingObjs.push(data[i].id);
+            }
+            updateHoldingObjsToRadar(holdingObjs, 50);
+        });   
+    }
+
+    function handleNotifications(event) {
+        let value = event.target.value;
+        /*
+        typedef struct {
+        int id;
+        float posLati;
+        float posLong;
+        float angle;
+        int type;
+        int owner;
+        int status;
+        int enableFg;
+        int viewFg;
+        } t_objInfo;*/
+        let a = [];
+        // Convert raw data bytes to hex values just for the sake of showing something.
+        // In the "real" world, you'd use data.getUint8, data.getUint16 or even
+        // TextDecoder to process raw data bytes.
+        for (let i = 0; i < value.byteLength; i++) {
+            //a.push('0x' + ('00' + value.getUint8(i).toString(16)).slice(-2));
+            a.push(value.getUint8(i).toString(16));
+        }
+        log('> notify ' + a.join(' '));
+        
+        var buffer = new ArrayBuffer(4);
+        
+        var dataView = new DataView(buffer);
+        dataView.setUint8(0, parseInt(value.getUint8(4).toString(16),16));
+        dataView.setUint8(1, parseInt(value.getUint8(5).toString(16),16));
+        dataView.setUint8(2, parseInt(value.getUint8(6).toString(16),16));
+        dataView.setUint8(3, parseInt(value.getUint8(7).toString(16),16));
+        var putObjLati = dataView.getFloat32(0, true);
+        
+        dataView.setUint8(0, parseInt(value.getUint8(8).toString(16),16));
+        dataView.setUint8(1, parseInt(value.getUint8(9).toString(16),16));
+        dataView.setUint8(2, parseInt(value.getUint8(10).toString(16),16));
+        dataView.setUint8(3, parseInt(value.getUint8(11).toString(16),16));
+        var putObjLong = dataView.getFloat32(0, true);
+        
+        dataView.setUint8(0, parseInt(value.getUint8(12).toString(16),16));
+        dataView.setUint8(1, parseInt(value.getUint8(13).toString(16),16));
+        var putAngle = dataView.getInt16(0, true);
+          
+        log("covert pos lati="+putObjLati+" long="+putObjLong+ " angle="+putAngle);
+    }
+  
+    function doubleToByteArray(number) {
+        var buffer = new ArrayBuffer(8);         // JS numbers are 8 bytes long, or 64 bits
+      var longNum = new Float64Array(buffer);  // so equivalent to Float64
+
+        longNum[0] = number;
+    
+        return Array.from(new Uint8Array(buffer)).reverse();  // reverse to get little endian
+    }
+  
+    window.onload = function (){
+    const CANDLE_SERVICE_UUID = 0x00FF;
+    
+    class PlaybulbCandle {
+      constructor() {
+        this.device = null;
+      }
+      
+      connect() {
+        alert('bb')
+        let options = {filters:[{services:[ CANDLE_SERVICE_UUID ]}]};
+        return navigator.bluetooth.requestDevice(options)
+        .then(function(device) {
+              this.device = device;
+              }.bind(this));
+      }
+    }
+    window.playbulbCandle = new PlaybulbCandle();
+    //window.playbulbCandle.connect();  
+  }
+  
+  </script>
+  <script>
+    var ChromeSamples = {
+      log: function() {
+        var line = Array.prototype.slice.call(arguments).map(function(argument) {
+                                                             return typeof argument === 'string' ? argument : JSON.stringify(argument);
+                                                             }).join(' ');
+                                                             
+                                                             document.querySelector('#log').textContent += line + '\n';
+      },
+      
+      clearLog: function() {
+        document.querySelector('#log').textContent = '';
+      },
+      
+      setStatus: function(status) {
+        document.querySelector('#status').textContent = status;
+      },
+      
+      setContent: function(newContent) {
+        var content = document.querySelector('#content');
+        while(content.hasChildNodes()) {
+          content.removeChild(content.lastChild);
+        }
+        content.appendChild(newContent);
+      }
+    };
+  </script>
+  <script>
+    log = ChromeSamples.log;
+    
+    function isWebBluetoothEnabled() {
+      if (navigator.bluetooth) {
+        return true;
+      } else {
+        ChromeSamples.setStatus('Web Bluetooth API is not available.\n' +
+                                'Please make sure the "Experimental Web Platform features" flag is enabled.');
+                                return false;
+      }
+    }
+  </script>
+  
+  
+  <style>
+    h4,#txt_result{ width:90%; margin:0 auto; }
+    #gmap{ width:90%; height:320px; margin:0 auto; }
+  </style>
+</head>
+<body>
+    <div id="gmap">ここに地図</div>
+    <h4>MyObjInfo</h4>
+    <div id="txt_result">ここに位置情報</div><br>
+    
+    
+    <input type="button" id="test" value="test exec"/><br />
+   
+    <!-- 
+    <select name="myId" id="myId">
+        <option value="1">1</option>
+        <option value="1">2</option>
+    </select>
+    -->
+    
+    <datalist id="myIds">
+        <option value="1">11</option>
+        <option value="2">2</option>
+    </datalist>
+    
+    <input id="myId" type="text" list="myIds" autofocus placeholder="My ID">
+    
+    <input type="button" id="ble_connect" value="ble connect"/>
+    <input type="button" id="ble_disconnect" value="ble disconnect"/><br/>
+    <input type="button" id="timer_switch" value="timer switch on"/><br/> 
+    <input type="button" id="ble_read_test" value="ble read test"/><br/>
+    <input type="button" id="ble_write_test" value="ble write test"/><br/>
+    <input type="button" id="update_pos" value="update pos"/><br/>
+    <input type="button" id="read_angle" value="read angle"/><br/>
+    <input type="button" id="update_obj" value="update obj"/><br/>
+    <input type="button" id="put_obj" value="put obj"/><br/>
+    <input type="button" id="get_obj" value="get obj"/><br/>
+    <input type="button" id="update_holding_objs" value="update holding objs"/><br/>
+   
+    <form>
+        <input id="service" type="text" list="services" autofocus placeholder="Bluetooth Service">
+        <input id="characteristic" type="text" list="characteristics" placeholder="Bluetooth Characteristic">
+        <input type="button" id="ble_getchar" value="ble getchar"/><br/>
+        <!--<button>Get Bluetooth characteristic properties</button>-->
+    </form>
+  
+    <datalist id="services">
+        <option value="alert_notification">alert_notification</option>
+     </datalist>
+   
+    <datalist id="characteristics">
+        <option value="aerobic_heart_rate_lower_limit">aerobic_heart_rate_lower_limit</option>
+        <option value="weight_scale_feature">weight_scale_feature</option>
+        <option value="wind_chill">wind_chill</option>
+    </datalist>
+  
+  <h3>Live Output</h3>
+  <div id="output" class="output">
+    <div id="content"></div>
+    <div id="status"></div>
+    <pre id="log"></pre>
+  </div>
+  
+</body>
+</html>

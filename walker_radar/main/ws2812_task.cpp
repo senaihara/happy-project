@@ -238,12 +238,10 @@ void ramdomBackWalk(uint16_t pixelCount, uint32_t loops, uint16_t delayms) {
 	}
 }
 
-
 void ws2812_task(void *pvParameters) {
 	pixel_t pixel;
 	uint32_t looppos=0;
 	uint16_t delayms=25;
-	oWS2812 = new WS2812(WS2812_GIPO,WS2812_PIXEL_COUNT,0);
 
 	while(1) {
 			ESP_LOGI(TAG, "test sequence %d",looppos);

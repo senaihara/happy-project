@@ -335,11 +335,12 @@ mpu9250_t mpu9250_data = {
 //application definition
 //radar init
 #define RADAR_MAX_DIST 1000 //レーダーで表示する中心からの最大距離
-int gDispWidth = 0;
 float gAngle=0;    //北を起点としてCW方向を正とする
 float gPreAngle=0;    //北を起点としてCW方向を正とする
 float gScale=1.0;
 float gPreScale=1.0;
+typedef enum t_radarMode {MODE_RADAR, MODE_START, MODE_MAIN_MENU, MODE_STAMP_SHEET, MODE_STAMP_LIB, MODE_SETUP} t_radarMode;
+t_radarMode gMode=MODE_START;
 
 color_t gBaseColor1 = {.r = 102, .g=255, .b = 102};
 float gDispRadius=0;
@@ -353,6 +354,7 @@ t_objInfo gPutObj;
 t_objInfo gGetObj;
 t_cell gObjList;
 int gHoldingObjIdList[32];
+int preGPIOES=0;;
 
 //vector <t_objInfo> gMapObjList;
 
@@ -704,7 +706,7 @@ static int Wait(int ms)
     else {
         for (int n=0; n<ms; n += 50) {
             vTaskDelay(50 / portTICK_RATE_MS);
-            if (tm) _checkTime();
+            //if (tm) _checkTime();
             //if (_checkTouch()) return 0;
         }
     }
@@ -952,7 +954,6 @@ void tft_demo_init() {
     TFT_print(tmp_buff, CENTER, LASTY+tempy);
 
     Wait(4000);
-    gDispWidth = (dispWin.x2-dispWin.x1)/2;
     //while (1) {
         if (run_gs_demo) {
             if (_demo_pass == 8) doprint = 0;
@@ -1113,8 +1114,6 @@ void init_tft(){
     y = (dispWin.y2 - dispWin.y1) / 2;
     if( x < y ) gDispRadius = x;
     else gDispRadius = y;
-
-    gDispWidth = (dispWin.x2-dispWin.x1)/2;
 }
 
 //encoder defitnitions
@@ -1155,7 +1154,7 @@ static void gpio_task_example(void* arg)
             fg = 0;
         }
               //DPRINT("GPIO[%d] intr, val: %d\n", io_num, gpio_get_level(io_num));
-                DPRINT("GPIO[%d] , val0=%d, val1=%d, count=%d\n", io_num, val0, val1, gEnCnt);
+                printf("GPIO[%d] , val0=%d, val1=%d, count=%d\n", io_num, val0, val1, gEnCnt);
                   //gpio_isr_handler_add(GPIO_INPUT_IO_0, gpio_isr_handler, (void*) GPIO_INPUT_IO_0);
                  //gpio_intr_enable(GPIO_INPUT_IO_0);
 
@@ -1180,7 +1179,8 @@ void init_encoder(){
     //create a queue to handle gpio event from isr
     gpio_evt_queue = xQueueCreate(10, sizeof(uint32_t));
     //start gpio task
-    xTaskCreate(gpio_task_example, "gpio_task_example", 2048, NULL, 10, NULL);
+    //xTaskCreate(gpio_task_example, "gpio_task_example", 2048, NULL, 10, NULL);
+    xTaskCreate(gpio_task_example, "gpio_task_example", 2048, NULL, 15, NULL);
 
     //install gpio isr service
     gpio_install_isr_service(ESP_INTR_FLAG_DEFAULT);
@@ -1285,7 +1285,7 @@ void drawObject(t_objInfo *obj, t_objInfo *obj_o){
 
      //TFT_setFont(USER_FONT, file_fonts[0]);
 
-     TFT_jpg_image2(posx1, posy1, preposx, preposy, 1, SPIFFS_BASE_PATH"/images/kuro.jpg", NULL, 0);
+     TFT_jpg_image2(posx1, posy1, preposx, preposy, 0, SPIFFS_BASE_PATH"/images/kuro.jpg", NULL, 0);
 
      //TFT_bmp_image(CENTER, CENTER, 1, SPIFFS_BASE_PATH"/images/tiger.bmp", NULL, 0);
 /*     ESP_LOGI(TAG, "Initializing SPIFFS");
@@ -1410,9 +1410,6 @@ void drawDisplay(){
 
     sprintf(buf, "%4.1f", samplingTime);
     disp_footer(buf);
-
-
-
 
 
     int backAngle= 360 - gAngle;
@@ -1590,6 +1587,181 @@ int smoothByMeanfilter(int *buffer, int len) {
   return (int)(sum / len);
 }
 
+//スタートモード時の処理
+void procStart(){
+    //TFT_jpg_image
+    TFT_jpg_image(CENTER, CENTER, 0, SPIFFS_BASE_PATH"/images/startup.jpg", NULL, 0);
+    Wait(2000);
+}
+//コンパス情報を更新する
+void updateCompasAndScale(){
+    static float compasX, compasY;
+    static int medianBufferX[MEDIAN_BUFFER_LEN];
+    static int medianBufferIndexX=0;
+    static int meanBufferX[MEAN_BUFFER_LEN];
+    static int meanBufferIndexX=0;
+
+    static int medianBufferY[MEDIAN_BUFFER_LEN];
+    static int medianBufferIndexY=0;
+    static int meanBufferY[MEAN_BUFFER_LEN];
+    static int meanBufferIndexY=0;
+    static int rawX, rawY;
+
+    mpu9250_mag_update(&mpu9250_data);
+    DPRINT("originValues:%03d %03d %03d  magValues: %03d %03d %03d\n",
+    mpu9250_mag_get(&mpu9250_data, 1, 0),
+    mpu9250_mag_get(&mpu9250_data, 3, 2),
+    mpu9250_mag_get(&mpu9250_data, 5, 4),
+    mpu9250_mag_x(&mpu9250_data),
+    mpu9250_mag_y(&mpu9250_data),
+    mpu9250_mag_z(&mpu9250_data));
+
+    medianBufferX[medianBufferIndexX] = mpu9250_mag_get(&mpu9250_data, 1, 0);
+    medianBufferIndexX = (medianBufferIndexX + 1)%MEDIAN_BUFFER_LEN;
+    rawX = smoothByMedianFilter(medianBufferX);
+
+    meanBufferX[meanBufferIndexX] = rawX;
+    meanBufferIndexX = (meanBufferIndexX + 1)%MEAN_BUFFER_LEN;
+    rawX = smoothByMeanfilter(meanBufferX, MEAN_BUFFER_LEN);
+
+    medianBufferY[medianBufferIndexY] = mpu9250_mag_get(&mpu9250_data, 3, 2);
+    medianBufferIndexY = (medianBufferIndexY + 1)%MEDIAN_BUFFER_LEN;
+    rawY = smoothByMedianFilter(medianBufferY);
+
+    //mpu9250_mag_get(&mpu9250_data, 5, 4);
+
+    meanBufferY[meanBufferIndexY] = rawY;
+    meanBufferIndexY = (meanBufferIndexY + 1)%MEAN_BUFFER_LEN;
+    rawY = smoothByMeanfilter(meanBufferY, MEAN_BUFFER_LEN);
+
+
+    compasX = (rawX-COMPAS_MIN_X-(COMPAS_MAX_X-COMPAS_MIN_X)/2.0)/(float)((COMPAS_MAX_X-COMPAS_MIN_X)/2.0);
+    compasY = (rawY-COMPAS_MIN_Y-(COMPAS_MAX_Y-COMPAS_MIN_Y)/2.0)/(float)((COMPAS_MAX_Y-COMPAS_MIN_Y)/2.0);
+    if(compasX > 1.0) compasX = 1.0;
+    if(compasX < -1.0) compasX = -1.0;
+    if(compasY > 1.0) compasY = 1.0;
+    if(compasY < -1.0) compasY = -1.0;
+
+    gAngle = 90-atan2(compasY, compasX)*180.0/PI;
+    if(gAngle<0) gAngle+=360.0;
+    if(gAngle>360) gAngle-=360.0;
+
+    gMyObj.angle = (short)gAngle;
+    DPRINT("compasX=%f, compasY=%f, gAngle=%f\n", compasX, compasY, gAngle);
+
+    //update gScale;
+    gPreScale= gScale;
+    gScale = 1.0-0.1*gEnCnt;
+    if(gScale<0.1){
+        gScale= 0.1;
+    }
+}
+
+//レーダーモードの時の処理
+void procRadar(){
+    TFT_fillScreen(TFT_BLACK);
+
+    while (1) {
+        //check ES Status. Menuから戻った際に、GPIO ESが0のままの場合があるため、一旦、GPIOに変更にあったあとに、return処理を受け付ける。
+        int esVal = gpio_get_level( GPIO_INPUT_IO_ES);
+        if(preGPIOES !=esVal){
+            preGPIOES = esVal;
+            if(esVal==0){
+                return;
+            }
+        }
+
+        if(gMode!=MODE_RADAR){
+            break;
+        }
+        updateCompasAndScale();
+        drawDisplay();
+    }
+}
+
+void showMainMenu(int itemNum, int labelLen, char itemName[itemNum][labelLen],int selectIndex){
+    int width, height, x, y;
+    width = (dispWin.x2 - dispWin.x1);
+    height = (dispWin.y2 - dispWin.y1);
+
+    int posRadius=60;
+    int itemRadius = 54;
+    float dDegree = 360/itemNum;
+    printf("selectIndex=%d\n",selectIndex);
+    TFT_fillScreen(TFT_BLACK);
+
+    //外円の描画
+    for(int i=0; i<6; i++){
+           TFT_drawCircle(width/2.0, height/2.0, gDispRadius-i, gBaseColor1);
+    }
+
+    float scalep=1.0, scaler=1.0;
+    for(int i=0; i<itemNum; i++){
+        if(i==selectIndex){
+            scaler=1.0;
+            scalep=1.0;
+        }else{
+            scaler=0.5;
+            scalep=1.2;
+        }
+        x = posRadius*cos((i*dDegree-90)*PI/180.0)*scalep+width/2.0;
+        y = posRadius*sin((i*dDegree-90)*PI/180.0)*scalep+height/2.0;
+        TFT_fillCircle(x, y, itemRadius*scaler, gBaseColor1);
+        printf("label%d=%s\n",i, *(itemName+i));
+        TFT_print(itemName[i], x, y);
+    }
+}
+
+//Main menuの時の処理
+void procMainMenu(){
+    gEnCnt=0;
+    TFT_fillScreen(TFT_BLACK);
+
+    static const int itemNum=4;
+    static const int labelLen=16;
+    char label[4][16] = {"Stamp Sheet", "Samp lib.", "Setup", "Back"};
+    int preEnCnt=gEnCnt;
+    int selectIndex=0;
+    showMainMenu(itemNum, labelLen, label, selectIndex);
+    int val=0;
+    while(1){
+        if((val=gpio_get_level(GPIO_INPUT_IO_ES))!=preGPIOES){
+            preGPIOES = val;
+            if(val==0){
+                printf("GPIO go to low. index=%d\n",selectIndex);
+                if(selectIndex==0){
+                    gMode = MODE_STAMP_SHEET;
+                }
+                else if(selectIndex==1){
+                    gMode = MODE_STAMP_LIB;
+                }else if(selectIndex==2){
+                    gMode = MODE_SETUP;
+                }else if(selectIndex==3){
+                    gMode = MODE_RADAR;
+
+                }
+                return;
+            }
+        }
+
+        if(gEnCnt!=preEnCnt){
+            if(gEnCnt>preEnCnt){
+                selectIndex++;
+                if(selectIndex>=itemNum){
+                    selectIndex=0;
+                }
+            }else{
+                selectIndex--;
+                if(selectIndex<0){
+                    selectIndex=itemNum-1;
+                }
+            }
+            showMainMenu(itemNum, labelLen, label, selectIndex);
+            preEnCnt=gEnCnt;
+        }
+        vTaskDelay(200 / portTICK_RATE_MS);
+    }
+}
 
 void app_main()
 {
@@ -1634,12 +1806,11 @@ void app_main()
 
     //init tft
     init_tft();
-
-    //init filesystem
+    image_debug = 0;
 
     //disp_header("File system INIT");
     _fg = TFT_CYAN;
-    TFT_print("Initializing SPIFFS...", CENTER, CENTER);
+    //TFT_print("Initializing SPIFFS...", CENTER, CENTER);
     // ==== Initialize the file system ====
     printf("\r\n\n");
     vfs_spiffs_register();
@@ -1651,9 +1822,9 @@ void app_main()
         _fg = TFT_GREEN;
         TFT_print("SPIFFS Mounted.", CENTER, LASTY+TFT_getfontheight()+2);
     }
-    Wait(-2000);
+    //Wait(-2000);
+    //起動が麺の表示
     TFT_fillScreen(TFT_BLACK);
-
 
     //init encoder
     init_encoder();
@@ -1661,21 +1832,8 @@ void app_main()
     //init compass
     mpu9250_mag_begin(&mpu9250_data);
 
-    int cnt=0;
-    float compasX, compasY;
-    static int medianBufferX[MEDIAN_BUFFER_LEN];
-    static int medianBufferIndexX=0;
-    static int meanBufferX[MEAN_BUFFER_LEN];
-    static int meanBufferIndexX=0;
-
-    static int medianBufferY[MEDIAN_BUFFER_LEN];
-    static int medianBufferIndexY=0;
-    static int meanBufferY[MEAN_BUFFER_LEN];
-    static int meanBufferIndexY=0;
-
-    int rawX, rawY;
+    //init object list
     initObjList(&gObjList);
-   // gMyObj.angle = 250;
     //test object
     //objListTest();
 
@@ -1695,19 +1853,39 @@ void app_main()
     //GATT更新用の時間
     time_t updateGATTTime=0, preUpdateGATTTime=0;
 
-
   //LED
-   xTaskCreate(ws2812_task, "gpio_task", 12288, NULL, 5, NULL);
+   //xTaskCreate(ws2812_task, "gpio_task", 12288, NULL, 5, NULL);
+    //oWS2812 = new WS2812(WS2812_GIPO,WS2812_PIXEL_COUNT,0);
+
+    gMode = MODE_MAIN_MENU;
+
 
     while (1) {
+        int val=0;
+        if((val=gpio_get_level(GPIO_INPUT_IO_ES))!=preGPIOES){
+            printf("go to this val=%d, preGPIES=%d\n",val, preGPIOES);
+            if(val==0){
+                gMode = MODE_MAIN_MENU;
+            }
+            preGPIOES = val;
+        }
+        printf("current mode =%d\n",gMode);
+        if(gMode == MODE_START){
+            procStart();
+            gMode = MODE_RADAR;
+        }else if(gMode==MODE_RADAR){
+            procRadar();
+            gMode = MODE_MAIN_MENU;
+        }else if(gMode==MODE_MAIN_MENU){
+            procMainMenu();
+        }
+
 #if 1
         //print current status
         DPRINT("gMyObj pos_lat=%f pos_long=%f pos_alt=%f angle=%d\n",gMyObj.posLati, gMyObj.posLong, gMyObj.posAlt, gMyObj.angle);
         //switch test
         DPRINT("Encoder Switch=%d Buck Switch=%d\n",gpio_get_level(GPIO_INPUT_IO_ES), gpio_get_level(GPIO_INPUT_IO_BS));
 #endif
-
-
 
 #if 0
         DPRINT("cnt: %d\n", cnt++);
@@ -1752,64 +1930,6 @@ void app_main()
         //notifyGetObject();
         }
 #endif
-
-
-
-//comasp
-#if 1
-        mpu9250_mag_update(&mpu9250_data);
-        DPRINT("originValues:%03d %03d %03d  magValues: %03d %03d %03d\n",
-        mpu9250_mag_get(&mpu9250_data, 1, 0),
-        mpu9250_mag_get(&mpu9250_data, 3, 2),
-        mpu9250_mag_get(&mpu9250_data, 5, 4),
-        mpu9250_mag_x(&mpu9250_data),
-        mpu9250_mag_y(&mpu9250_data),
-        mpu9250_mag_z(&mpu9250_data));
-
-        medianBufferX[medianBufferIndexX] = mpu9250_mag_get(&mpu9250_data, 1, 0);
-        medianBufferIndexX = (medianBufferIndexX + 1)%MEDIAN_BUFFER_LEN;
-        rawX = smoothByMedianFilter(medianBufferX);
-
-        meanBufferX[meanBufferIndexX] = rawX;
-        meanBufferIndexX = (meanBufferIndexX + 1)%MEAN_BUFFER_LEN;
-        rawX = smoothByMeanfilter(meanBufferX, MEAN_BUFFER_LEN);
-
-        medianBufferY[medianBufferIndexY] = mpu9250_mag_get(&mpu9250_data, 3, 2);
-        medianBufferIndexY = (medianBufferIndexY + 1)%MEDIAN_BUFFER_LEN;
-        rawY = smoothByMedianFilter(medianBufferY);
-
-        //mpu9250_mag_get(&mpu9250_data, 5, 4);
-
-        meanBufferY[meanBufferIndexY] = rawY;
-        meanBufferIndexY = (meanBufferIndexY + 1)%MEAN_BUFFER_LEN;
-        rawY = smoothByMeanfilter(meanBufferY, MEAN_BUFFER_LEN);
-
-
-        compasX = (rawX-COMPAS_MIN_X-(COMPAS_MAX_X-COMPAS_MIN_X)/2.0)/(float)((COMPAS_MAX_X-COMPAS_MIN_X)/2.0);
-        compasY = (rawY-COMPAS_MIN_Y-(COMPAS_MAX_Y-COMPAS_MIN_Y)/2.0)/(float)((COMPAS_MAX_Y-COMPAS_MIN_Y)/2.0);
-        if(compasX > 1.0) compasX = 1.0;
-        if(compasX < -1.0) compasX = -1.0;
-        if(compasY > 1.0) compasY = 1.0;
-        if(compasY < -1.0) compasY = -1.0;
-
-        gAngle = 90-atan2(compasY, compasX)*180.0/PI;
-        if(gAngle<0) gAngle+=360.0;
-        if(gAngle>360) gAngle-=360.0;
-
-        gMyObj.angle = (short)gAngle;
-
-
-        DPRINT("compasX=%f, compasY=%f, gAngle=%f\n", compasX, compasY, gAngle);
-#endif
-//---> compas
-
-        //update gScale;
-        gPreScale= gScale;
-        gScale = 1.0-0.1*gEnCnt;
-        if(gScale<0.1){
-            gScale= 0.1;
-        }
-        drawDisplay();
     }
     return;
 }

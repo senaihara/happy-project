@@ -413,7 +413,7 @@ void TFT_jpg_image2(int x, int y, int prex, int prey, uint8_t scale, char *fname
 
             //first erase pre image
             if(x!=prex || y!=prey){
-                TFT_fillRect(prex-jd.width/2, prey-jd.height/2, jd.width/2, jd.height/2, TFT_BLACK);
+                TFT_fillRect(prex-jd.width/2, prey-jd.height/2, jd.width, jd.height, TFT_BLACK);
                 printf("width=%d height=%d scale=%d\n",jd.width,jd.height,scale);
             }
 

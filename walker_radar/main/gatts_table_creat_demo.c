@@ -311,14 +311,22 @@ static struct timeval gTime, gPreTime;
 static xQueueHandle gpio_evt_queue = NULL;
 
 int gEnCnt=0;
+//Radarが開始する際のカウンター
+int gRadarInitialEnCnt=0;
 // ==================================================
 
 // ==================================================
 //compas setting
-#define COMPAS_MAX_Y 91
-#define COMPAS_MIN_Y 36
-#define COMPAS_MAX_X 8
-#define COMPAS_MIN_X -51
+//#define COMPAS_MAX_Y 91
+//#define COMPAS_MIN_Y 36
+//#define COMPAS_MAX_X 8
+//#define COMPAS_MIN_X -51
+
+#define COMPAS_MAX_Y 181
+#define COMPAS_MIN_Y 100
+#define COMPAS_MAX_X 49
+#define COMPAS_MIN_X -32
+
 
 mpu9250_t mpu9250_data = {
     .address = MPU9250_ADDRESS_AD0_LOW,
@@ -353,8 +361,14 @@ t_objInfo gMapObj;
 t_objInfo gPutObj;
 t_objInfo gGetObj;
 t_cell gObjList;
+t_cell gHoldingObjList;
 int gHoldingObjIdList[32];
-int preGPIOES=0;;
+int gPreGPIOES=0;
+
+//ObjectType一覧
+#define OBJ_TYPE_WALKER 1
+#define OBJ_TYPE_STAMP 2
+
 
 //vector <t_objInfo> gMapObjList;
 
@@ -1591,7 +1605,7 @@ int smoothByMeanfilter(int *buffer, int len) {
 void procStart(){
     //TFT_jpg_image
     TFT_jpg_image(CENTER, CENTER, 0, SPIFFS_BASE_PATH"/images/startup.jpg", NULL, 0);
-    Wait(2000);
+    Wait(-2000);
 }
 //コンパス情報を更新する
 void updateCompasAndScale(){
@@ -1608,7 +1622,7 @@ void updateCompasAndScale(){
     static int rawX, rawY;
 
     mpu9250_mag_update(&mpu9250_data);
-    DPRINT("originValues:%03d %03d %03d  magValues: %03d %03d %03d\n",
+    printf("originValues:%03d %03d %03d  magValues: %03d %03d %03d\n",
     mpu9250_mag_get(&mpu9250_data, 1, 0),
     mpu9250_mag_get(&mpu9250_data, 3, 2),
     mpu9250_mag_get(&mpu9250_data, 5, 4),
@@ -1619,20 +1633,26 @@ void updateCompasAndScale(){
     medianBufferX[medianBufferIndexX] = mpu9250_mag_get(&mpu9250_data, 1, 0);
     medianBufferIndexX = (medianBufferIndexX + 1)%MEDIAN_BUFFER_LEN;
     rawX = smoothByMedianFilter(medianBufferX);
+    printf("rawX1=%d",rawX);
 
     meanBufferX[meanBufferIndexX] = rawX;
     meanBufferIndexX = (meanBufferIndexX + 1)%MEAN_BUFFER_LEN;
     rawX = smoothByMeanfilter(meanBufferX, MEAN_BUFFER_LEN);
+    printf(" rawX2=%d",rawX);
 
     medianBufferY[medianBufferIndexY] = mpu9250_mag_get(&mpu9250_data, 3, 2);
     medianBufferIndexY = (medianBufferIndexY + 1)%MEDIAN_BUFFER_LEN;
     rawY = smoothByMedianFilter(medianBufferY);
+    printf(" rawY1=%d",rawY);
 
     //mpu9250_mag_get(&mpu9250_data, 5, 4);
 
     meanBufferY[meanBufferIndexY] = rawY;
     meanBufferIndexY = (meanBufferIndexY + 1)%MEAN_BUFFER_LEN;
     rawY = smoothByMeanfilter(meanBufferY, MEAN_BUFFER_LEN);
+    printf(" rawY2=%d",rawY);
+
+    //printf(" COMPAS_MIN_X=%d COMPAS_MAX_X=%d COMPAS_MIN_Y=%d COMPAS_MAX_Y\n",);
 
 
     compasX = (rawX-COMPAS_MIN_X-(COMPAS_MAX_X-COMPAS_MIN_X)/2.0)/(float)((COMPAS_MAX_X-COMPAS_MIN_X)/2.0);
@@ -1648,6 +1668,7 @@ void updateCompasAndScale(){
 
     gMyObj.angle = (short)gAngle;
     DPRINT("compasX=%f, compasY=%f, gAngle=%f\n", compasX, compasY, gAngle);
+    printf("compasX=%f, compasY=%f, gAngle=%f\n", compasX, compasY, gAngle);
 
     //update gScale;
     gPreScale= gScale;
@@ -1661,18 +1682,23 @@ void updateCompasAndScale(){
 void procRadar(){
     TFT_fillScreen(TFT_BLACK);
 
+    //カウンター情報の引きつぎ
+    gEnCnt=gRadarInitialEnCnt;
+
     while (1) {
         //check ES Status. Menuから戻った際に、GPIO ESが0のままの場合があるため、一旦、GPIOに変更にあったあとに、return処理を受け付ける。
         int esVal = gpio_get_level( GPIO_INPUT_IO_ES);
-        if(preGPIOES !=esVal){
-            preGPIOES = esVal;
+        if(gPreGPIOES !=esVal){
+            gPreGPIOES = esVal;
             if(esVal==0){
+                gRadarInitialEnCnt=gEnCnt;
                 return;
             }
         }
 
         if(gMode!=MODE_RADAR){
-            break;
+            gRadarInitialEnCnt=gEnCnt;
+            return;
         }
         updateCompasAndScale();
         drawDisplay();
@@ -1707,7 +1733,8 @@ void showMainMenu(int itemNum, int labelLen, char itemName[itemNum][labelLen],in
         x = posRadius*cos((i*dDegree-90)*PI/180.0)*scalep+width/2.0;
         y = posRadius*sin((i*dDegree-90)*PI/180.0)*scalep+height/2.0;
         TFT_fillCircle(x, y, itemRadius*scaler, gBaseColor1);
-        printf("label%d=%s\n",i, *(itemName+i));
+        //printf("label%d=%s\n",i, *(itemName+i));
+        TFT_setFont(DEFAULT_FONT, NULL);
         TFT_print(itemName[i], x, y);
     }
 }
@@ -1725,8 +1752,8 @@ void procMainMenu(){
     showMainMenu(itemNum, labelLen, label, selectIndex);
     int val=0;
     while(1){
-        if((val=gpio_get_level(GPIO_INPUT_IO_ES))!=preGPIOES){
-            preGPIOES = val;
+        if((val=gpio_get_level(GPIO_INPUT_IO_ES))!=gPreGPIOES){
+            gPreGPIOES = val;
             if(val==0){
                 printf("GPIO go to low. index=%d\n",selectIndex);
                 if(selectIndex==0){
@@ -1761,6 +1788,212 @@ void procMainMenu(){
         }
         vTaskDelay(200 / portTICK_RATE_MS);
     }
+}
+
+//近くのスタンプIDを取得する。(0以下はエラー）
+int getNearStampId(){
+    t_cell *tmp=&gObjList;
+    float x,y,z,alt=0;
+    float dist,threthDist=150;
+    float minDist=9999;
+    int minId=0,minTypeId=0;
+    while (tmp->next != NULL) {
+        tmp = tmp->next;
+        calcPlaneDistance(gMyObj.posLati-tmp->node.posLati, gMyObj.posLong-tmp->node.posLong, alt, &x, &y, &z);
+        dist=sqrt(x*x+y*y);
+        printf("%s id=%d obj distance=%f\n",__func__,tmp->node.id, dist);
+        if(tmp->node.type==OBJ_TYPE_STAMP && dist<minDist){
+            minDist=dist;
+            minId=tmp->node.id;
+            minTypeId=tmp->node.typeId;
+        }
+        //DPRINT();
+        //drawObject(&(tmp->node), &gMyObj);
+        //DPRINT("[cnt=%d id=%d] ",cnt, tmp->node.id);
+    }
+    printf("%s minId=%d, minTypeId=%d, minDist=%f\n",__func__, minId, minTypeId, minDist);
+    if(minDist>threthDist){
+        printf("%s no near object found.\n",__func__);
+        return -1;
+    }
+    return minId;
+}
+
+void procStampSheet(){
+    TFT_fillScreen(TFT_BLACK);
+
+    int width, height, x, y;
+    width = (dispWin.x2 - dispWin.x1);
+    height = (dispWin.y2 - dispWin.y1);
+
+    //周辺のオブジェクトのチェック、スタンプの場合には、取得できる。
+    int objId = getNearStampId();
+    if(objId<=0){
+        TFT_setFont(DEJAVU18_FONT, NULL);
+        TFT_print("No near stamp.", CENTER, CENTER);
+        TFT_print("Please explore again!!.", CENTER, LASTY+TFT_getfontheight()+2);
+
+        vTaskDelay(3000 / portTICK_RATE_MS);
+        return;
+    }
+
+    //探索オブジェクト情報の取得
+    t_objInfo *gObj = getObj(&gObjList, objId);
+    if(gObj==NULL){
+        printf("[%s] no object in gObjList\n",__func__);
+        return;
+    }
+
+    //Stamp催促メッセージの表示
+    TFT_fillScreen(TFT_BLACK);
+    TFT_setFont(DEJAVU18_FONT, NULL);
+    TFT_print("Find  Stamp!.", CENTER, CENTER);
+    TFT_print("Please push stamp here!!", CENTER, LASTY+TFT_getfontheight()+2);
+    //LEDを変更
+    gLEDMode = LED_MODE_RANDOM;
+
+    struct timeval sTime, nTime, dTime;
+    gettimeofday(&sTime, NULL);
+
+    int vales=0;
+    int valbs=0, prevalbs=0;int pushFg=0;
+    while(1){
+        gettimeofday(&nTime, NULL);
+        timersub(&nTime, &sTime, &dTime);
+        //タイムアウト
+        if(dTime.tv_sec>20){
+            TFT_fillScreen(TFT_BLACK);
+            //押されていない時にはメッセージを表示する。
+            if(pushFg==0){
+                TFT_print("Time out", CENTER, CENTER);
+                vTaskDelay(3000 / portTICK_RATE_MS);
+            }
+            return;
+        }
+
+        vales=gpio_get_level(GPIO_INPUT_IO_ES);
+        valbs=gpio_get_level(GPIO_INPUT_IO_BS);
+        //printf("vales=%d valbs=%d\n",vales, valbs);
+        if(vales!=gPreGPIOES){
+            gPreGPIOES = vales;
+            if(vales==0){
+                return;
+            }
+        }
+        if(valbs!=prevalbs){
+            if(valbs==0){
+                pushFg=1;
+                //printf("go show img;");
+                TFT_fillScreen(TFT_BLACK);
+                char filename[32];
+                sprintf(filename, "%s/images/stamp%d.jpg", SPIFFS_BASE_PATH, gObj->typeId);
+                for(int i=3; i>=0; i--){
+                    TFT_jpg_image(CENTER, CENTER, i, filename, NULL, 0);
+                    vTaskDelay(150 / portTICK_RATE_MS);
+                }
+                //外円の描画
+                for(int i=0; i<6; i++){
+                  TFT_drawCircle(width/2.0, height/2.0, gDispRadius-i, gBaseColor1);
+                }
+                vTaskDelay(200 / portTICK_RATE_MS);
+
+                //取得オブジェクトの反映
+                updateObjList(&gHoldingObjList, *gObj);
+                printObjList(&gHoldingObjList);
+            }
+            prevalbs = valbs;
+        }
+        vTaskDelay(100 / portTICK_RATE_MS);
+    }
+}
+
+void showStampLib(int selectIndex){
+
+    int width, height, x, y;
+    width = (dispWin.x2 - dispWin.x1);
+    height = (dispWin.y2 - dispWin.y1);
+
+    int itemNum=20;
+    int posRadius=100;
+    int itemRadius = 10;
+    float dDegree = 360/itemNum;
+    printf("selectIndex=%d\n",selectIndex);
+    TFT_fillScreen(TFT_BLACK);
+
+    //画像を乗せてしまいましょう。
+    if(1<=selectIndex&&selectIndex<=20 && checkTypeExist(&gHoldingObjList, OBJ_TYPE_STAMP, selectIndex)){
+        char filename[32];
+        sprintf(filename, "%s/images/stamp%d.jpg", SPIFFS_BASE_PATH, selectIndex);
+        TFT_jpg_image(CENTER, CENTER, 1, filename, NULL, 0);
+    }
+
+    //外円の描画
+    for(int i=0; i<6; i++){
+           TFT_drawCircle(width/2.0, height/2.0, gDispRadius-i, gBaseColor1);
+    }
+
+    color_t gray = {.r = 100, .g=100, .b = 100};
+    //Stampリストの表示
+    for(int i=1; i<=itemNum; i++){
+        x = posRadius*cos(((i-1)*dDegree-90)*PI/180.0)+width/2.0;
+        y = posRadius*sin(((i-1)*dDegree-90)*PI/180.0)+height/2.0;
+        if(checkTypeExist(&gHoldingObjList, OBJ_TYPE_STAMP, i)){
+            TFT_fillCircle(x, y, itemRadius, gBaseColor1);
+
+        }else{
+            TFT_fillCircle(x, y, itemRadius, gray);
+        }
+        //printf("label%d=%s\n",i, *(itemName+i));
+        //TFT_setFont(DEFAULT_FONT, NULL);
+        //TFT_print(itemName[i], x, y);
+    }
+
+    //選択対象の表示
+    if(1<=selectIndex&&selectIndex<=20){
+        x = posRadius*cos(((selectIndex-1)*dDegree-90)*PI/180.0)+width/2.0;
+        y = posRadius*sin(((selectIndex-1)*dDegree-90)*PI/180.0)+height/2.0;
+        for(int i=0; i<3; i++){
+            TFT_drawCircle(x, y, itemRadius-i, TFT_YELLOW);
+        }
+    }
+}
+
+//Stampライブラリの表示
+void procStampLib(){
+    TFT_fillScreen(TFT_BLACK);
+
+    //全項目を周辺に表示
+
+    //選択しているものを中央に表示
+    int val,preEnCnt=gEnCnt,selectIndex=1;
+    int maxStampNum=20;
+    showStampLib(selectIndex);
+    while(1){
+        //Encoder Switchが押されたら戻る。
+       if((val=gpio_get_level(GPIO_INPUT_IO_ES))!=gPreGPIOES){
+           gPreGPIOES = val;
+           if(val==0){
+               return;
+           }
+       }
+
+       if(gEnCnt!=preEnCnt){
+           if(gEnCnt>preEnCnt){
+               selectIndex++;
+               if(selectIndex>maxStampNum){
+                   selectIndex=1;
+               }
+           }else{
+               selectIndex--;
+               if(selectIndex<1){
+                   selectIndex=maxStampNum;
+               }
+           }
+           showStampLib(selectIndex);
+           preEnCnt=gEnCnt;
+       }
+       vTaskDelay(200 / portTICK_RATE_MS);
+   }
 }
 
 void app_main()
@@ -1834,6 +2067,7 @@ void app_main()
 
     //init object list
     initObjList(&gObjList);
+    initObjList(&gHoldingObjList);
     //test object
     //objListTest();
 
@@ -1845,39 +2079,49 @@ void app_main()
     t_objInfo tmpObj;
     tmpObj.posLati = 36.549160;
     tmpObj.posLong = 139.880458;
-
-    //tmpObj.posLati = 36.554754;
-    //tmpObj.posLong = 139.885162;
+    tmpObj.id=255;
+    tmpObj.type=OBJ_TYPE_STAMP;
+    tmpObj.typeId=1;
     updateObjList(&gObjList, tmpObj);
+    updateObjList(&gHoldingObjList, tmpObj);
 
     //GATT更新用の時間
     time_t updateGATTTime=0, preUpdateGATTTime=0;
 
   //LED
-   //xTaskCreate(ws2812_task, "gpio_task", 12288, NULL, 5, NULL);
-    //oWS2812 = new WS2812(WS2812_GIPO,WS2812_PIXEL_COUNT,0);
+   xTaskCreate(ws2812_task, "gpio_task", 12288, NULL, 5, NULL);
+    //ws2812_test();
+    gMode = MODE_STAMP_LIB;
 
-    gMode = MODE_MAIN_MENU;
-
-
+    int preMenuEnCng=0;
     while (1) {
         int val=0;
-        if((val=gpio_get_level(GPIO_INPUT_IO_ES))!=preGPIOES){
-            printf("go to this val=%d, preGPIES=%d\n",val, preGPIOES);
+        if((val=gpio_get_level(GPIO_INPUT_IO_ES))!=gPreGPIOES){
+            printf("go to this val=%d, preGPIES=%d\n",val, gPreGPIOES);
             if(val==0){
                 gMode = MODE_MAIN_MENU;
             }
-            preGPIOES = val;
+            gPreGPIOES = val;
         }
         printf("current mode =%d\n",gMode);
         if(gMode == MODE_START){
             procStart();
             gMode = MODE_RADAR;
         }else if(gMode==MODE_RADAR){
+            gLEDMode = LED_MODE_NONE;
             procRadar();
             gMode = MODE_MAIN_MENU;
         }else if(gMode==MODE_MAIN_MENU){
+            gLEDMode = LED_MODE_FADEINOUT_GREEN;
             procMainMenu();
+        }else if(gMode==MODE_STAMP_SHEET){
+            gLEDMode = LED_MODE_FADEINOUT_GREEN;
+            procStampSheet();
+            gMode = MODE_RADAR;
+        }else if(gMode==MODE_STAMP_LIB){
+            gLEDMode = LED_MODE_FADEINOUT_GREEN;
+            procStampLib();
+            gMode = MODE_RADAR;
         }
 
 #if 1

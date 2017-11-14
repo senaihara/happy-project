@@ -58,6 +58,7 @@ void copyObjData(t_cell *p, t_objInfo obj){
     p->node.posLong = obj.posLong;
     p->node.angle = obj.angle;
     p->node.type = obj.type;
+    p->node.typeId = obj.typeId;
     p->node.owner = obj.owner;
     p->node.status = obj.status;
     p->node.enableFg = obj.enableFg;
@@ -143,15 +144,39 @@ void deleteAllObjList(t_cell *bp) {
   }
 }
 
+//指定されたobjIdのオブジェクトを返す
+//存在しない場合にはNULLを返す。
+t_objInfo *getObj(t_cell*bp, int objId){
+    t_cell *tmp=bp;
+    int cnt=0;
+    while (tmp->next != NULL) {
+        tmp = tmp->next;
+        if(tmp->node.id == objId)
+            return &tmp->node;
+    }
+    return NULL;
+}
+
 void printObjList(t_cell *bp){
     t_cell *tmp=bp;
     int cnt=0;
     while (tmp->next != NULL) {
         tmp = tmp->next;
-        printf("[cnt=%d id=%d] ",cnt, tmp->node.id);
+        printf("[cnt=%d id=%d type=%d typeid=%d] ",cnt, tmp->node.id, tmp->node.type, tmp->node.typeId);
         cnt++;
     }
     printf("\n");
+}
+
+bool checkTypeExist(t_cell *bp, int type, int typeId){
+    t_cell *tmp=bp;
+    while (tmp->next != NULL) {
+        tmp = tmp->next;
+        if(tmp->node.type==type && tmp->node.typeId==typeId){
+            return true;
+        }
+    }
+    return false;
 }
 
 void objListTest(){
@@ -414,7 +439,7 @@ void TFT_jpg_image2(int x, int y, int prex, int prey, uint8_t scale, char *fname
             //first erase pre image
             if(x!=prex || y!=prey){
                 TFT_fillRect(prex-jd.width/2, prey-jd.height/2, jd.width, jd.height, TFT_BLACK);
-                printf("width=%d height=%d scale=%d\n",jd.width,jd.height,scale);
+                //printf("width=%d height=%d scale=%d\n",jd.width,jd.height,scale);
             }
 
             dev.x = x-jd.width/2;

@@ -16,11 +16,16 @@
 #ifndef WS2812_TASK_H_
 #define WS2812_TASK_H_
 
+typedef enum t_LEDMode {LED_MODE_NONE, LED_MODE_RANDOM, LED_MODE_RAINBOW, LED_MODE_FADEINOUT_RED, LED_MODE_FADEINOUT_GREEN, LED_MODE_FADEINOUT_BLUE, LED_MODE_FADEINOUT_WHITE} t_LEDMode;
+
+extern t_LEDMode gLEDMode;
+
 #ifdef __cplusplus
 extern "C" {
 #endif
 
 void ws2812_task(void *pvParameters);
+void ws2812_test();
 
 #ifdef __cplusplus
 }

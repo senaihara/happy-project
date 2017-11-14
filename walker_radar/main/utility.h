@@ -11,6 +11,7 @@ typedef struct {
     float posAlt;
     short angle;
     char type;
+    char typeId;
     char owner;
     char status;
     char enableFg;
@@ -30,10 +31,12 @@ typedef struct t_cell
 void initObjList(t_cell *bp);
 
 int getObjListLen(t_cell *bp);
+t_objInfo *getObj(t_cell*bp, int objId);
 int updateObjList(t_cell* bp, t_objInfo obj);
 int deleteObj2List(t_cell *bp, t_objInfo obj);
 void deleteAllObjList(t_cell *bp);
 void printObjList(t_cell *bp);
+bool checkTypeExist(t_cell *bp, int type, int typeId);
 void objListTest();
 
 void calcPlaneDistance(float lat, float lon, float alt, float *x, float *y, float*z);

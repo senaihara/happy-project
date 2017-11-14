@@ -37,9 +37,12 @@
 #define WS2812_GIPO GPIO_NUM_13
 
 //#define WS2812_GIPO GPIO_NUM_22
-#define WS2812_PIXEL_COUNT 16
+#define WS2812_PIXEL_COUNT 2
 
 static WS2812 *oWS2812;
+
+//LED Mode
+t_LEDMode gLEDMode=LED_MODE_NONE;
 
 uint8_t random(uint8_t min,uint8_t max) {
 	if (min>max) {
@@ -88,7 +91,9 @@ void setColor(uint16_t pixelCount, pixel_t pixel) {
 	for(uint16_t i = 0; i < pixelCount; i++) {
 		oWS2812->setPixel(i,pixel.red,pixel.green,pixel.blue);
 	}
+
 	oWS2812->show();
+
 }
 
 void setRainbow(uint16_t pixelCount, uint32_t loops, uint16_t delayms) {
@@ -238,69 +243,181 @@ void ramdomBackWalk(uint16_t pixelCount, uint32_t loops, uint16_t delayms) {
 	}
 }
 
+
 void ws2812_task(void *pvParameters) {
 	pixel_t pixel;
 	uint32_t looppos=0;
 	uint16_t delayms=25;
+	oWS2812 = new WS2812(WS2812_GIPO,WS2812_PIXEL_COUNT,0);
 
+	t_LEDMode preLEDMode=gLEDMode;
+	while(1){
+	    if(gLEDMode==LED_MODE_NONE){
+	        if(gLEDMode!=preLEDMode){
+	            printf("LED Mode switch None\n");
+	            preLEDMode=gLEDMode;
+	        }
+	        oWS2812->clear();
+	    }else if(gLEDMode==LED_MODE_RANDOM){
+	        if(gLEDMode!=preLEDMode){
+	            printf("LED Mode switch RANDOM\n");
+	            preLEDMode=gLEDMode;
+	        }
+	        ramdomBlink(WS2812_PIXEL_COUNT,10,50);
+	        //ramdomBlink(WS2812_PIXEL_COUNT,10,100);
+	    }else if(gLEDMode==LED_MODE_RAINBOW){
+	        if(gLEDMode!=preLEDMode){
+                 printf("LED Mode switch Rainbow\n");
+                 preLEDMode=gLEDMode;
+             }
+	        setRainbow(WS2812_PIXEL_COUNT,WS2812_PIXEL_COUNT, 100);
+	    }else if(gLEDMode==LED_MODE_FADEINOUT_RED){
+            if(gLEDMode!=preLEDMode){
+                 printf("LED Mode switch Fadeinout red\n");
+                 preLEDMode=gLEDMode;
+             }
+            pixel.red=255;
+            pixel.green=0;
+            pixel.blue=0;
+            printf("fadeinoutcolor\n");
+
+            fadeInOutColor(WS2812_PIXEL_COUNT,pixel,delayms);
+	    }else if(gLEDMode==LED_MODE_FADEINOUT_GREEN){
+            if(gLEDMode!=preLEDMode){
+                printf("LED Mode switch Fadeinout green\n");
+                preLEDMode=gLEDMode;
+            }
+            pixel.red=00;
+            pixel.green=255;
+            pixel.blue=0;
+
+            fadeInOutColor(WS2812_PIXEL_COUNT,pixel,delayms);
+	    }else if(gLEDMode==LED_MODE_FADEINOUT_BLUE){
+            if(gLEDMode!=preLEDMode){
+                printf("LED Mode switch Fadeinout blue\n");
+                preLEDMode=gLEDMode;
+            }
+            pixel.red=00;
+            pixel.green=0;
+            pixel.blue=255;
+
+            fadeInOutColor(WS2812_PIXEL_COUNT,pixel,delayms);
+        }else if(gLEDMode==LED_MODE_FADEINOUT_WHITE){
+            if(gLEDMode!=preLEDMode){
+                printf("LED Mode switch Fadeinout blue\n");
+                preLEDMode=gLEDMode;
+            }
+            pixel.red=255;
+            pixel.green=255;
+            pixel.blue=255;
+
+            fadeInOutColor(WS2812_PIXEL_COUNT,pixel,delayms);
+        }
+       vTaskDelay(200 / portTICK_RATE_MS);
+	}
+
+	#if 0
 	while(1) {
-			ESP_LOGI(TAG, "test sequence %d",looppos);
+	    //if(gLEDMode==LED_MODE_NONE){
+	       ESP_LOGI(TAG, "test sequence %d",looppos);
+
+	       printf("bluringRainbow\n");
 
 			bluringRainbow(WS2812_PIXEL_COUNT, 20);
 
+			printf("randomBlink\n");
+
 			ramdomBlink(WS2812_PIXEL_COUNT,10,100);
+
+			printf("setRainbow\n");
 
 			setRainbow(WS2812_PIXEL_COUNT,WS2812_PIXEL_COUNT, 100);
 
 			pixel.red=255;
 			pixel.green=0;
 			pixel.blue=0;
+			printf("fadeinoutcolor\n");
+
 			fadeInOutColor(WS2812_PIXEL_COUNT,pixel,delayms);
+
+			printf("fadeinoutcolor\n");
 
 			pixel.red=0;
 			pixel.green=255;
 			pixel.blue=0;
 			fadeInOutColor(WS2812_PIXEL_COUNT,pixel,delayms);
 
+			printf("fadeinoutcolor\n");
+
 			pixel.red=0;
 			pixel.green=0;
 			pixel.blue=255;
 			fadeInOutColor(WS2812_PIXEL_COUNT,pixel,delayms);
+
+			printf("fadeinoutcolor\n");
 
 			pixel.red=0;
 			pixel.green=255;
 			pixel.blue=255;
 			fadeInOutColor(WS2812_PIXEL_COUNT,pixel,delayms);
 
+			printf("fadeinoutcolor\n");
+
 			pixel.red=255;
 			pixel.green=0;
 			pixel.blue=255;
 			fadeInOutColor(WS2812_PIXEL_COUNT,pixel,delayms);
+
+			printf("fadeinoutcolor\n");
 
 			pixel.red=255;
 			pixel.green=255;
 			pixel.blue=0;
 			fadeInOutColor(WS2812_PIXEL_COUNT,pixel,delayms);
 
+			printf("fadeinoutcolor\n");
+
 			pixel.red=255;
 			pixel.green=255;
 			pixel.blue=255;
 			fadeInOutColor(WS2812_PIXEL_COUNT,pixel,delayms);
+
+			printf("fadeiRainbow\n");
 
 			fadingRainbow(WS2812_PIXEL_COUNT, 100);
 
+			printf("randomWalk\n");
+
 			ramdomWalk(WS2812_PIXEL_COUNT,WS2812_PIXEL_COUNT,10);
+			printf("BackWalk\n");
+
 			ramdomBackWalk(WS2812_PIXEL_COUNT,WS2812_PIXEL_COUNT,10);
 			ramdomWalk(WS2812_PIXEL_COUNT,WS2812_PIXEL_COUNT,30);
 			ramdomBackWalk(WS2812_PIXEL_COUNT,WS2812_PIXEL_COUNT,30);
 			ramdomWalk(WS2812_PIXEL_COUNT,WS2812_PIXEL_COUNT,10);
 			ramdomBackWalk(WS2812_PIXEL_COUNT,WS2812_PIXEL_COUNT,10);
 
+			printf("bluringFullRainbow\n");
+
 			bluringfullRainbow(WS2812_PIXEL_COUNT, 50);
 
 			looppos++;
 		}
+#endif
 	ESP_LOGI(TAG, "All done!");
 
 	vTaskDelete(NULL);
+}
+
+void ws2812_test(){
+    printf("start rainbow\n");
+    pixel_t pixel;
+    pixel.red=255;
+                pixel.green=255;
+                pixel.blue=255;
+                oWS2812 = new WS2812(WS2812_GIPO,WS2812_PIXEL_COUNT,0);
+      setColor(2, pixel);
+    //bluringRainbow(WS2812_PIXEL_COUNT, 20);
+    printf("end rainbow\n");
+
 }

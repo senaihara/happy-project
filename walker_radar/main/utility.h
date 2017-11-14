@@ -32,6 +32,8 @@ void initObjList(t_cell *bp);
 
 int getObjListLen(t_cell *bp);
 t_objInfo *getObj(t_cell*bp, int objId);
+t_objInfo *getObjByType(t_cell*bp, int type, int typeId);
+
 int updateObjList(t_cell* bp, t_objInfo obj);
 int deleteObj2List(t_cell *bp, t_objInfo obj);
 void deleteAllObjList(t_cell *bp);

@@ -190,9 +190,9 @@ static uint8_t get_obj_uuid[2] = {0x36, 0x2a};
 static uint8_t holding_objs_uuid[2] = {0x37, 0x2a};
 
 static const uint8_t cur_pos_val[11] ={0x00, 0x00, 0x00,0x00, 0x00,0x00, 0x00,0x00, 0x00, 0x00, 0x00};
-static const uint8_t map_obj_val[16] ={0x00,0x00, 0x00,0x00, 0x00,0x00, 0x00,0x00,0x00,0x00, 0x00,0x00, 0x00,0x00, 0x00,0x00};
+static const uint8_t map_obj_val[17] ={0x00, 0x00,0x00, 0x00,0x00, 0x00,0x00, 0x00,0x00,0x00,0x00, 0x00,0x00, 0x00,0x00, 0x00,0x00};
 //static const uint8_t put_obj_val[10] ={0x00,0x00, 0x00,0x00, 0x00,0x00, 0x00,0x00,0x00,0x00};
-static const uint8_t put_obj_val[10] ={0x00,0x00, 0x00,0x00, 0x00,0x00, 0x00,0x00};
+static const uint8_t put_obj_val[11] ={0x00,0x0,0x00, 0x00,0x00, 0x00,0x00, 0x00,0x00};
 static const uint8_t get_obj_val[1] ={0x00};
 static const uint8_t holding_objs_val[32] ={0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
         0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
@@ -455,13 +455,17 @@ static void gatts_profile_event_handler(esp_gatts_cb_event_t event,
             memcpy(angleBuf, p+9, 2);
             tmpObj.angle = *((short*)angleBuf);
             tmpObj.type = *(p+11);
-            tmpObj.owner = *(p+12);
-            tmpObj.status = *(p+13);
-            tmpObj.enableFg = *(p+14);
-            tmpObj.viewFg = *(p+15);
+            tmpObj.typeId = *(p+12);
+            tmpObj.owner = *(p+13);
+            tmpObj.status = *(p+14);
+            tmpObj.enableFg = *(p+15);
+            tmpObj.viewFg = *(p+16);
 
-            DPRINT("updated mapObj id=%d lati=%f long=%f angle=%d type=%d owner=%d status=%d enableFg=%d viewFg=%d\n",
-                    tmpObj.id, tmpObj.posLati, tmpObj.posLong, tmpObj.angle, tmpObj.type, tmpObj.owner, tmpObj.status, tmpObj.enableFg, tmpObj.viewFg);
+            //printf("updated mapObj id=%d lati=%f long=%f angle=%d type=%d typeid=%d, owner=%d status=%d enableFg=%d viewFg=%d\n",
+            //        (int)tmpObj.id, tmpObj.posLati, tmpObj.posLong, tmpObj.angle, (int)tmpObj.type, (int)tmpObj.typeId (int)tmpObj.owner, (int)tmpObj.status, (int)tmpObj.enableFg, (int)tmpObj.viewFg);
+            printf("updated mapObj id=%d lati=%f long=%f angle=%d type=%d typeid=%d, owner=%d status=%d enableFg=%d viewFg=%d\n",
+                               (int)tmpObj.id, tmpObj.posLati, tmpObj.posLong, tmpObj.angle, (int)tmpObj.type, (int)tmpObj.typeId, (int)tmpObj.owner, (int)tmpObj.status, (int)tmpObj.enableFg, (int)tmpObj.viewFg);
+
             updateObjList(&gObjList, tmpObj);
         }
 
@@ -625,7 +629,7 @@ static void ble_indicate2(int value) {
             length, prf_char, false);
 
 }
-static void notifyPutObject() {
+static void notifyPutObject(t_objInfo *obj) {
     if (gatts_if_for_indicate == ESP_GATT_IF_NONE) {
         DPRINT("cannot indicate because gatts_if_for_indicate is NONE\n");
         return;
@@ -637,12 +641,13 @@ static void notifyPutObject() {
     uint16_t length = 0;
     const uint8_t *prf_char;
     //esp_ble_gatts_get_attr_value(HANDLE_PUT_OBJ,  &length, &prf_char);
-    char tmpBuf[10];
+    char tmpBuf[11];
     char *bufP = tmpBuf;
-    memcpy(bufP, (float*)(&gPutObj.posLati),4);
-    memcpy(bufP+4, (float*)(&gPutObj.posLong),4);
-    memcpy(bufP+8, (short*)(&gPutObj.type),1);
-    memcpy(bufP+9, (short*)(&gPutObj.owner),1);
+    memcpy(bufP, (float*)(&obj->posLati),4);
+    memcpy(bufP+4, (float*)(&obj->posLong),4);
+    memcpy(bufP+8, (short*)(&obj->type),1);
+    memcpy(bufP+9, (short*)(&obj->typeId),1);
+    memcpy(bufP+10, (short*)(&obj->owner),1);
 
     //esp_ble_gatts_send_indicate(gatts_if_for_indicate, 0, attr_handle,
      //       value_len, value_arr, false);
@@ -653,7 +658,7 @@ static void notifyPutObject() {
 
 }
 
-static void notifyGetObject() {
+static void notifyGetObject(int objId) {
     if (gatts_if_for_indicate == ESP_GATT_IF_NONE) {
         DPRINT("cannot indicate because gatts_if_for_indicate is NONE\n");
         return;
@@ -667,7 +672,7 @@ static void notifyGetObject() {
     //esp_ble_gatts_get_attr_value(HANDLE_PUT_OBJ,  &length, &prf_char);
     char tmpBuf[1];
     char *bufP = tmpBuf;
-    memcpy(bufP, (short*)(&gGetObj.id),1);
+    memcpy(bufP, (short*)(&objId),1);
 
     esp_ble_gatts_send_indicate(gatts_if_for_indicate, 0, attr_handle,
             sizeof(tmpBuf), &tmpBuf, false);
@@ -1900,6 +1905,9 @@ void procStampSheet(){
                 //取得オブジェクトの反映
                 updateObjList(&gHoldingObjList, *gObj);
                 printObjList(&gHoldingObjList);
+
+                //DBへの反映
+               notifyGetObject(gObj->id);
             }
             prevalbs = valbs;
         }
@@ -1967,8 +1975,11 @@ void procStampLib(){
     //選択しているものを中央に表示
     int val,preEnCnt=gEnCnt,selectIndex=1;
     int maxStampNum=20;
+    int valbs = 0, prevalbs=0;
     showStampLib(selectIndex);
     while(1){
+        valbs=gpio_get_level(GPIO_INPUT_IO_BS);
+
         //Encoder Switchが押されたら戻る。
        if((val=gpio_get_level(GPIO_INPUT_IO_ES))!=gPreGPIOES){
            gPreGPIOES = val;
@@ -1992,6 +2003,24 @@ void procStampLib(){
            showStampLib(selectIndex);
            preEnCnt=gEnCnt;
        }
+       //Pushボタンが押されたら、選択している項目をスタンプする。
+       if(valbs!=prevalbs){
+           printf("valbs is change. valbs=%d\n",valbs);
+           prevalbs = valbs;
+           if(valbs==0){
+               if(checkTypeExist(&gHoldingObjList, OBJ_TYPE_STAMP, selectIndex)){
+                   printf("%s selected object own. selectIndex=%d, put execute\n",__func__, selectIndex);
+                   t_objInfo *obj= getObjByType(&gHoldingObjList, OBJ_TYPE_STAMP, selectIndex);
+                   if(obj==NULL){
+                       printf("%s getObjByTypeError %d %d\n",__func__, OBJ_TYPE_STAMP, selectIndex);
+                       continue;
+                   }
+                   notifyPutObject(obj);
+               }
+
+           }
+       }
+
        vTaskDelay(200 / portTICK_RATE_MS);
    }
 }
@@ -2170,7 +2199,7 @@ void app_main()
             preUpdateGATTTime = updateGATTTime;
 
         //notifyPutObject();
-        gGetObj.id = 1;
+        //gGetObj.id = 1;
         //notifyGetObject();
         }
 #endif

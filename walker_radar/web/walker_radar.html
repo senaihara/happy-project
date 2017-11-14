@@ -10,18 +10,34 @@
 <script>
     //オブジェクトクラス定義
     class WalkerObj {
-        constructor(id=0, posLat=0, posLong=0, posAlt=0, angle=0, type=0, owner=0, statusFg=0, enableFg=1, viewFg=1, deleteFg=0){
+        constructor(id=0, posLat=0, posLong=0, posAlt=0, angle=0, type=0, typeId=0, owner=0, statusFg=0, enableFg=1, viewFg=1, deleteFg=0){
             this.id = id;
             this.posLat = posLat;
             this.posLong = posLong;
             this.posAlt = posAlt;
             this.angle = angle;
             this.type = type;
+            this.typeiId = typeId;
             this.owner = owner;
             this.statusFg = statusFg;
             this.enableFg = enableFg;
             this.viewFg = viewFg;
             this.deleteFg = deleteFg;
+        }
+        
+        copy(walkerObj){
+            this.id = walkerObj.id;
+            this.posLat = walkerObj.posLat;
+            this.posLong = walkerObj.posLong;
+            this.posAlt = walkerObj.posAlt;
+            this.angle = walkerObj.angle;
+            this.type = walkerObj.type;
+            this.typeiId = walkerObj.typeId;
+            this.owner = walkerObj.owner;
+            this.statusFg = walkerObj.statusFg;
+            this.enableFg = walkerObj.enableFg;
+            this.viewFg = walkerObj.viewFg;
+            this.deleteFg = walkerObj.deleteFg;
         }
         
         print(){
@@ -207,12 +223,13 @@
                             var putObjLong = dataView.getFloat32(0, true);
                               
                             log("covert pos lati="+putObjLati+" long="+putObjLong+ " type="
-                            +value.getUint8(8).toString(16)+" owner="+value.getUint8(9).toString(16));
+                            +value.getUint8(8).toString(16)+" typeId="+ value.getUint8(9).toString(16)+" owner="+value.getUint8(10).toString(16));
                             var putObj = new WalkerObj();
                             putObj.posLat = putObjLati;
                             putObj.posLong = putObjLong;
                             putObj.type = value.getUint8(8).toString(16);
-                            putObj.owner = value.getUint8(9).toString(16);
+                            putObj.typeId = value.getUint8(9).toString(16);
+                            putObj.owner = value.getUint8(10).toString(16);
                             
                             putObjToDB(putObj);
                        });                       
@@ -324,7 +341,7 @@
             
             //id[1],lat[4],long[4],angle[2],type[1],owner[1],status[1],enableFg[1],viewFg[1]
                      
-            var sendBuf = new Int8Array(16);
+            var sendBuf = new Int8Array(17);
             sendBuf[0] = gCount;
             gCount++;
             sendBuf[1] = arrayLati[0];
@@ -338,10 +355,11 @@
             sendBuf[9] = arrayAngle[0];
             sendBuf[10] = arrayAngle[1];
             sendBuf[11] = 1;//type
-            sendBuf[12] = 2;//owner
-            sendBuf[13] = 3;//status
-            sendBuf[14] = 4;//enableFg
-            sendBuf[15] = 5;//viewFg
+            sendBuf[12] = 2;//type_id
+            sendBuf[13] = 3;//owner
+            sendBuf[14] = 4;//status
+            sendBuf[15] = 5;//enableFg
+            sendBuf[16] = 6;//viewFg
             
             log("update obj sendBuf "+sendBuf);
             gCharaMapObj.writeValue(sendBuf).then(_ => {
@@ -355,8 +373,9 @@
             var putObj = new WalkerObj();
             putObj.posLat = 1;
             putObj.posLong = 2;
-            putObj.type = -1;
-            putObj.owner = -1;
+            putObj.type = 3;
+            putObj.typeId = 4;
+            putObj.owner = 5;
             putObjToDB(putObj);
             return;
         })
@@ -534,10 +553,11 @@
         sendBuf[9] = arrayAngle[0];
         sendBuf[10] = arrayAngle[1];
         sendBuf[11] = walkerObj.type;//type
-        sendBuf[12] = walkerObj.owner;//owner
-        sendBuf[13] = walkerObj.statusFg;//status
-        sendBuf[14] = walkerObj.enableFg;//enableFg
-        sendBuf[15] = walkerObj.viewFg;//viewFg
+        sendBuf[12] = walkerObj.typeId;//type id
+        sendBuf[13] = walkerObj.owner;//owner
+        sendBuf[14] = walkerObj.statusFg;//status
+        sendBuf[15] = walkerObj.enableFg;//enableFg
+        sendBuf[16] = walkerObj.viewFg;//viewFg
         
         //log("update obj sendBuf "+sendBuf);
         return gCharaMapObj.writeValue(sendBuf)
@@ -563,13 +583,17 @@
             var len = data.length;
             log("search_obj.php len="+len);
             for(var i = 0; i < len; i++) {
-                tmpObj = new WalkerObj(data[i].id, data[i].pos_lat, data[i].pos_long, data[i].pos_alt, data[i].angle, data[i].type, data[i].owner, data[i].status_fg, data[i].enable_fg, data[i].delete_fg);
+                tmpObj = new WalkerObj(data[i].id, data[i].pos_lat, data[i].pos_long, data[i].pos_alt, data[i].angle, data[i].type, data[i].type_id, data[i].owner, data[i].status_fg, data[i].enable_fg, data[i].delete_fg);
                 
                 //check existance
                 var fg = 0;
                 for(var j=0; j<gObjList.length; j++){
                     if(gObjList[j].id == tmpObj.id){
                         fg = 1;
+                        //update values
+                        gObjList[j].copy(tmpObj);
+                        log("tmpobj log="+tmpObj.posLong);
+                        
                         break;
                     }
                 }
@@ -579,12 +603,13 @@
                 }
                 gObjList.push(tmpObj);
             }
-        }); 
-        
-        //radarへの更新処理
-        for(var i = 0; i < gObjList.length; i++) {
+            
+            //radarへの更新処理
+            for(var i = 0; i < gObjList.length; i++) {
             updataObjs2Radar(gObjList[i], 50);
         }
+            
+        }); 
     }
     
     //DBに対してobjの配置を行う
@@ -594,7 +619,7 @@
         // $.getJSON('https://160.16.116.250/walker/api/update_cur_pos.php',
         //{id:gMyId, pos_lat:gMyObj.pos_lat, pos_long:gMyObj.pos_long, pos_alt:gMyObj.pos_alt, pos_angle:gMyObj.angle })
         $.getJSON('https://160.16.116.250/walker/api/put_obj.php',
-        {pos_lat:walkerObj.posLat, pos_long:walkerObj.posLong, pos_alt:0, type:walkerObj.type, owner:walkerObj.owner})
+        {pos_lat:walkerObj.posLat, pos_long:walkerObj.posLong, pos_alt:0, type:walkerObj.type, type_id:walkerObj.typeId, owner:walkerObj.owner})
         .done(function(data) {
             var len = data.length;
             //alert("getdata");

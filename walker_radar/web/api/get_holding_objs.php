@@ -59,6 +59,7 @@ SELECT
 id AS id,
 name AS name,
 type AS type,
+type_id AS type_id,
 pos_lat AS pos_lat,
 pos_long AS pos_long,
 pos_alt AS pos_alt,

@@ -67,12 +67,13 @@ if($count <= 0){
     returnJson($result);
 }
 
-//$obj_idの情報を取得する。
+//$obj_idの情報をobjes tableから取得する。
 $sql = "
 SELECT
 id AS id,
 name AS name,
 type AS type,
+type_id AS type_id,
 pos_lat AS pos_lat,
 pos_long AS pos_long,
 pos_alt AS pos_alt,
@@ -89,10 +90,10 @@ foreach ($stmt as $row) {
     $objData = $row;
 }
 
-//idの項目をget_objectsに更新
-$sql="insert into holding_objects (holder_id, id, type, name, pos_lat, pos_long, pos_alt, pos_angle, owner, get_time) 
-values ($holder_id, $objData[id], $objData[type], $objData[name], $objData[pos_lat], $objData[pos_long], $objData[pos_alt], $objData[pos_angle], $objData[owner] , now())
-on duplicate key update holder_id=$holder_id, id=$objData[id], type=$objData[type], name= $objData[name], pos_lat=$objData[pos_lat], pos_long=$objData[pos_long], pos_alt = $objData[pos_alt], pos_angle=$objData[pos_angle], get_time=now()";
+//idの項目をholding_objesテーブルに更新
+$sql="insert into holding_objects (holder_id, id, type, type_id, name, pos_lat, pos_long, pos_alt, pos_angle, owner, get_time) 
+values ($holder_id, $objData[id], $objData[type], $objData[type_id], $objData[name], $objData[pos_lat], $objData[pos_long], $objData[pos_alt], $objData[pos_angle], $objData[owner] , now())
+on duplicate key update holder_id=$holder_id, id=$objData[id], type=$objData[type], type_id=$objData[type_id], name= $objData[name], pos_lat=$objData[pos_lat], pos_long=$objData[pos_long], pos_alt = $objData[pos_alt], pos_angle=$objData[pos_angle], get_time=now()";
 
 #error_log("sql=$sql");
 

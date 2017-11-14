@@ -42,6 +42,8 @@ $pos_long = $_REQUEST['pos_long'];
 $pos_alt = $_REQUEST['pos_alt'];
 $owner = $_REQUEST['owner'];
 $type = $_REQUEST['type'];
+$type_id = $_REQUEST['type_id'];
+
 
 /*
 $pos_lat = 0;
@@ -78,9 +80,9 @@ while ($row = $stmt->fetch()) {
     $nextid=$row[0]+1;
 }
 
-$sql="insert into objects (id, pos_lat, pos_long, pos_alt, pos_angle, type, owner, create_time, update_time) 
-values ($nextid, $pos_lat, $pos_long, $pos_alt, 0, $type, $owner, now(), now()) 
-on duplicate key update id=$nextid, pos_lat=$pos_lat, pos_long=$pos_long, pos_alt = $pos_alt, pos_angle=0, type=$type, owner=$owner, update_time=now()";
+$sql="insert into objects (id, pos_lat, pos_long, pos_alt, pos_angle, type, type_id, owner, create_time, update_time) 
+values ($nextid, $pos_lat, $pos_long, $pos_alt, 0, $type, $type_id, $owner, now(), now()) 
+on duplicate key update id=$nextid, pos_lat=$pos_lat, pos_long=$pos_long, pos_alt = $pos_alt, pos_angle=0, type=$type, type=$type_id, owner=$owner, update_time=now()";
 //error_log("sql=$sql");
 
 //DBへの接続

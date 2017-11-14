@@ -157,6 +157,17 @@ t_objInfo *getObj(t_cell*bp, int objId){
     return NULL;
 }
 
+t_objInfo *getObjByType(t_cell*bp, int type, int typeId){
+    t_cell *tmp=bp;
+    int cnt=0;
+    while (tmp->next != NULL) {
+        tmp = tmp->next;
+        if(tmp->node.type == type && tmp->node.typeId == typeId)
+            return &tmp->node;
+    }
+    return NULL;
+}
+
 void printObjList(t_cell *bp){
     t_cell *tmp=bp;
     int cnt=0;

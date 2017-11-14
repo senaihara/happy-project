@@ -2241,6 +2241,7 @@ void TFT_restoreClipWin()
 
 
 // ================ JPG SUPPORT ================================================
+/* go to header
 // User defined device identifier
 typedef struct {
 	FILE		*fhndl;			// File handler for input function
@@ -2252,7 +2253,7 @@ typedef struct {
     color_t		*linbuf[2];		// memory buffer used for display output
     uint8_t		linbuf_idx;
 } JPGIODEV;
-
+*/
 
 // User defined call-back function to input JPEG data from file
 //---------------------

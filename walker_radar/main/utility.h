@@ -44,6 +44,8 @@ void objListTest();
 void calcPlaneDistance(float lat, float lon, float alt, float *x, float *y, float*z);
 
 void TFT_jpg_image2(int x, int y, int prex, int prey, uint8_t scale, char *fname, uint8_t *buf, int size);
+void TFT_jpg_image_get_handle(JPGIODEV *dev, JDEC *jd, char *fname);
+void TFT_jpg_image_with_handle(int x, int y, int prex, int scale, int prey, JPGIODEV *dev, JDEC *jd);
 
 //#define DEBUG_PRINT
 #ifdef DEBUG_PRINT

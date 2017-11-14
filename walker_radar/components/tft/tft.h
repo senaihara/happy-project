@@ -9,6 +9,7 @@
 
 #include <stdlib.h>
 #include "tftspi.h"
+#include "rom/tjpgd.h"
 
 typedef struct {
 	uint16_t        x1;
@@ -127,6 +128,18 @@ extern const color_t TFT_PINK;
 #define FONT_7SEG		9
 #define USER_FONT		10  // font will be read from file
 
+//move from tft.c
+// User defined device identifier
+typedef struct {
+	FILE		*fhndl;			// File handler for input function
+    int			x;				// image top left point X position
+    int			y;				// image top left point Y position
+    uint8_t		*membuff;		// memory buffer containing the image
+    uint32_t	bufsize;		// size of the memory buffer
+    uint32_t	bufptr;			// memory buffer current position
+    color_t		*linbuf[2];		// memory buffer used for display output
+    uint8_t		linbuf_idx;
+} JPGIODEV;
 
 
 // ===== PUBLIC FUNCTIONS =========================================================================

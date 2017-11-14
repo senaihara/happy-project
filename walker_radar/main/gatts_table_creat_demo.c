@@ -369,6 +369,9 @@ int gPreGPIOES=0;
 #define OBJ_TYPE_WALKER 1
 #define OBJ_TYPE_STAMP 2
 
+//リアルタイムに表示する画像
+JPGIODEV gKuroDev;
+JDEC gKuroJd;
 
 //vector <t_objInfo> gMapObjList;
 
@@ -1304,7 +1307,8 @@ void drawObject(t_objInfo *obj, t_objInfo *obj_o){
 
      //TFT_setFont(USER_FONT, file_fonts[0]);
 
-     TFT_jpg_image2(posx1, posy1, preposx, preposy, 0, SPIFFS_BASE_PATH"/images/kuro.jpg", NULL, 0);
+     //TFT_jpg_image2(posx1, posy1, preposx, preposy, 0, SPIFFS_BASE_PATH"/images/kuro.jpg", NULL, 0);
+     TFT_jpg_image_with_handle(posx1, posy1, preposx, preposy, 0, &gKuroDev, &gKuroJd);
 
      //TFT_bmp_image(CENTER, CENTER, 1, SPIFFS_BASE_PATH"/images/tiger.bmp", NULL, 0);
 /*     ESP_LOGI(TAG, "Initializing SPIFFS");
@@ -2084,9 +2088,11 @@ void app_main()
         _fg = TFT_GREEN;
         TFT_print("SPIFFS Mounted.", CENTER, LASTY+TFT_getfontheight()+2);
     }
-    //Wait(-2000);
-    //起動が麺の表示
+    //起動画面の表示
     TFT_fillScreen(TFT_BLACK);
+    //リアルタイム画像の取得
+    TFT_jpg_image_get_handle(&gKuroDev, &gKuroJd, SPIFFS_BASE_PATH"/images/kuro1.jpg");
+
 
     //init encoder
     init_encoder();

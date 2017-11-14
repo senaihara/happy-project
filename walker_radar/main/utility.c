@@ -246,7 +246,7 @@ void calcPlaneDistance(float lat, float lon, float alt, float *x, float *y, floa
 
 // ================ JPG SUPPORT ================================================
 // User defined device identifier
-typedef struct {
+/*typedef struct {
     FILE        *fhndl;         // File handler for input function
     int         x;              // image top left point X position
     int         y;              // image top left point Y position
@@ -256,7 +256,7 @@ typedef struct {
     color_t     *linbuf[2];     // memory buffer used for display output
     uint8_t     linbuf_idx;
 } JPGIODEV;
-
+*/
 
 // User defined call-back function to input JPEG data from file
 //---------------------
@@ -376,6 +376,7 @@ static UINT tjd_output (
 
 
 // tft.jpgimage(X, Y, scale, file_name, buf, size]
+// erase before image and load and showimage
 // X & Y can be < 0 !
 //==================================================================================
 void TFT_jpg_image2(int x, int y, int prex, int prey, uint8_t scale, char *fname, uint8_t *buf, int size)
@@ -494,4 +495,115 @@ exit:
     if (dev.fhndl) fclose(dev.fhndl);  // close input file
 
 }
+
+void TFT_jpg_image_get_handle(JPGIODEV *dev, JDEC *jd, char *fname)
+{
+    //JPGIODEV dev;
+    struct stat sb;
+    char *work = NULL;      // Pointer to the working buffer (must be 4-byte aligned)
+    UINT sz_work = 3800;    // Size of the working buffer (must be power of 2)
+    //JDEC jd;                // Decompression object (70 bytes)
+    JRESULT rc;
+
+    dev->linbuf[0] = NULL;
+    dev->linbuf[1] = NULL;
+    dev->linbuf_idx = 0;
+
+    dev->fhndl = NULL;
+
+    // image from file
+    dev->membuff = NULL;
+    dev->bufsize = 0;
+    dev->bufptr = 0;
+
+    if (stat(fname, &sb) != 0) {
+        printf("File error: %ss\r\n", strerror(errno));
+        goto exit;
+    }
+
+    dev->fhndl = fopen(fname, "r");
+    if (!dev->fhndl) {
+        if (image_debug) printf("Error opening file: %s\r\n", strerror(errno));
+        goto exit;
+    }
+
+    work = malloc(sz_work);
+
+    if(!work){
+        printf("work buffer allocation error\r\n");
+        goto exit;
+    }
+
+    if (dev->membuff) rc = jd_prepare(jd, tjd_buf_input, (void *)work, sz_work, dev);
+    else rc = jd_prepare(jd, tjd_input, (void *)work, sz_work, dev);
+
+    if (rc == JDR_OK) {
+        dev->linbuf[0] = heap_caps_malloc(JPG_IMAGE_LINE_BUF_SIZE*3, MALLOC_CAP_DMA);
+        if (dev->linbuf[0] == NULL) {
+            printf("Error allocating line buffer #0\r\n");
+            goto exit;
+        }
+        dev->linbuf[1] = heap_caps_malloc(JPG_IMAGE_LINE_BUF_SIZE*3, MALLOC_CAP_DMA);
+        if (dev->linbuf[1] == NULL) {
+            printf("Error allocating line buffer #1\r\n");
+            goto exit;
+        }
+    }else {
+        printf("jpg prepare error %d\r\n", rc);
+    }
+
+    return;
+
+exit:
+    if (work) free(work);  // free work buffer
+    if (dev->linbuf[0]) free(dev->linbuf[0]);
+    if (dev->linbuf[1]) free(dev->linbuf[1]);
+    if (dev->fhndl) fclose(dev->fhndl);  // close input file
+}
+
+void TFT_jpg_image_with_handle(int x, int y, int prex, int prey, int scale, JPGIODEV *dev, JDEC *jd)
+{
+    JRESULT rc;
+    char *work = NULL;      // Pointer to the working buffer (must be 4-byte aligned)
+    UINT sz_work = 3800;    // Size of the working buffer (must be power of 2)
+
+    if (x == CENTER) x = ((dispWin.x2 - dispWin.x1 + 1 - (int)(jd->width >> scale)) / 2) + dispWin.x1;
+    else if (x == RIGHT) x = dispWin.x2 + 1 - (int)(jd->width >> scale);
+
+    if (y == CENTER) y = ((dispWin.y2 - dispWin.y1 + 1 - (int)(jd->height >> scale)) / 2) + dispWin.y1;
+    else if (y == BOTTOM) y = dispWin.y2 + 1 - (int)(jd->height >> scale);
+
+    if (x < ((dispWin.x2-1) * -1)) x = (dispWin.x2-1) * -1;
+    if (y < ((dispWin.y2-1)) * -1) y = (dispWin.y2-1) * -1;
+    if (x > (dispWin.x2-1)) x = dispWin.x2 - 1;
+    if (y > (dispWin.y2-1)) y = dispWin.y2-1;
+
+    //ファイルカーソルを最初に戻す必要あり。
+    rewind(dev->fhndl);
+
+    //jd_prepareは、毎回実行する必要あり。
+    work = malloc(sz_work);
+    if(!work){
+     printf("work buffer allocation error\r\n");
+     goto exit;
+    }
+    rc = jd_prepare(jd, tjd_input, (void *)work, sz_work, dev);
+
+    if(x!=prex || y!=prey){
+    TFT_fillRect(prex-jd->width/2, prey-jd->height/2, jd->width, jd->height, TFT_BLACK);
+               //printf("width=%d height=%d scale=%d\n",jd.width,jd.height,scale);
+    }
+
+    dev->x = x-jd->width/2;
+    dev->y = y-jd->height/2;
+
+   // Start to decode the JPEG file
+   disp_select();
+   rc = jd_decomp(jd, tjd_output, scale);
+   disp_deselect();
+
+exit:
+   if (work) free(work);  // free work buffer
+}
+
 

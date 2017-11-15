@@ -71,6 +71,8 @@
 
 #define GATTS_DEMO_CHAR_VAL_LEN_MAX		0x40
 
+char gDeviceName[25]=SAMPLE_DEVICE_NAME;
+
 uint8_t char1_str[] ={0x11,0x22,0x33};
 
 uint16_t heart_rate_handle_table[HRS_IDX_NB];
@@ -326,6 +328,10 @@ int gRadarInitialEnCnt=0;
 #define COMPAS_MIN_Y 100
 #define COMPAS_MAX_X 49
 #define COMPAS_MIN_X -32
+int gCompas_X_Max = COMPAS_MAX_X;
+int gCompas_X_Min = COMPAS_MIN_X;
+int gCompas_Y_Max = COMPAS_MAX_Y;
+int gCompas_Y_Min = COMPAS_MIN_Y;
 
 
 mpu9250_t mpu9250_data = {
@@ -401,7 +407,8 @@ static void gatts_profile_event_handler(esp_gatts_cb_event_t event,
     switch (event) {
     	case ESP_GATTS_REG_EVT:
 		ESP_LOGI(GATTS_TABLE_TAG, "%s %d\n", __func__, __LINE__);
-        	esp_ble_gap_set_device_name(SAMPLE_DEVICE_NAME);
+        	//esp_ble_gap_set_device_name(SAMPLE_DEVICE_NAME);
+		esp_ble_gap_set_device_name(gDeviceName);
         	ESP_LOGI(GATTS_TABLE_TAG, "%s %d\n", __func__, __LINE__);
        	esp_ble_gap_config_adv_data(&heart_rate_adv_config);
 
@@ -1664,8 +1671,11 @@ void updateCompasAndScale(){
     //printf(" COMPAS_MIN_X=%d COMPAS_MAX_X=%d COMPAS_MIN_Y=%d COMPAS_MAX_Y\n",);
 
 
-    compasX = (rawX-COMPAS_MIN_X-(COMPAS_MAX_X-COMPAS_MIN_X)/2.0)/(float)((COMPAS_MAX_X-COMPAS_MIN_X)/2.0);
-    compasY = (rawY-COMPAS_MIN_Y-(COMPAS_MAX_Y-COMPAS_MIN_Y)/2.0)/(float)((COMPAS_MAX_Y-COMPAS_MIN_Y)/2.0);
+    //compasX = (rawX-COMPAS_MIN_X-(COMPAS_MAX_X-COMPAS_MIN_X)/2.0)/(float)((COMPAS_MAX_X-COMPAS_MIN_X)/2.0);
+    //compasY = (rawY-COMPAS_MIN_Y-(COMPAS_MAX_Y-COMPAS_MIN_Y)/2.0)/(float)((COMPAS_MAX_Y-COMPAS_MIN_Y)/2.0);
+    compasX = (rawX-gCompas_X_Min-(gCompas_X_Max-gCompas_X_Min)/2.0)/(float)((gCompas_X_Max-gCompas_X_Min)/2.0);
+    compasY = (rawY-gCompas_Y_Min-(gCompas_Y_Max-gCompas_Y_Min)/2.0)/(float)((gCompas_Y_Max-gCompas_Y_Min)/2.0);
+
     if(compasX > 1.0) compasX = 1.0;
     if(compasX < -1.0) compasX = -1.0;
     if(compasY > 1.0) compasY = 1.0;
@@ -2029,6 +2039,59 @@ void procStampLib(){
    }
 }
 
+void readSetup(){
+    FILE *fp;
+    char buf[256];
+    char *p1, *p2;
+    if((fp=fopen(SPIFFS_BASE_PATH"/conf/setup.txt", "r"))==NULL){
+        printf("Devie file is not here\n");
+        return;
+    }
+    while(fgets(buf,256,fp) != NULL ){
+        //改行の削除
+        if(strlen(buf)>2){
+            int i=strlen(buf)-1;
+            if(buf[i] == 0x0a) {
+                buf[i] = 0x00;
+                i --;
+            }
+            if(buf[i] == 0x0d) {
+                buf[i] = 0x00;
+                i --;
+            }
+        }
+        //buf[strlen(buf)] = '\0';
+        printf("buf=%s strlen=%d\n",buf,strlen(buf));
+
+        p1=strtok(buf,"=");
+        p2=strtok(NULL, "\n");
+        //改行削除
+
+        if(!strcmp(p1, "DEVICE_NAME")){
+            memset(gDeviceName, 0, sizeof(gDeviceName));
+            strcpy(gDeviceName, p2);
+            printf("DEVICE_NAME=%s\n",gDeviceName);
+        }
+        if(!strcmp(p1, "COMPAS_X_MAX")){
+            gCompas_X_Max = atoi(p2);
+            printf("COMPAS_X_MAX=%d\n",gCompas_X_Max);
+        }
+        if(!strcmp(p1, "COMPAS_X_MIN")){
+                gCompas_X_Min = atoi(p2);
+                printf("COMPAS_X_MIN=%d\n",gCompas_X_Min);
+        }
+        if(!strcmp(p1, "COMPAS_Y_MAX")){
+                gCompas_Y_Max = atoi(p2);
+                printf("COMPAS_Y_MAX=%d\n",gCompas_Y_Max);
+        }
+        if(!strcmp(p1, "COMPAS_Y_MIN")){
+                gCompas_Y_Min = atoi(p2);
+                printf("COMPAS_Y_MIN=%d\n",gCompas_Y_Min);
+        }
+    }
+    fclose(fp);
+}
+
 void app_main()
 {
     esp_err_t ret;
@@ -2041,6 +2104,7 @@ void app_main()
     }
     ESP_ERROR_CHECK( ret );
 
+    /*
     esp_bt_controller_config_t bt_cfg = BT_CONTROLLER_INIT_CONFIG_DEFAULT();
     ret = esp_bt_controller_init(&bt_cfg);
     if (ret) {
@@ -2069,6 +2133,7 @@ void app_main()
     esp_ble_gatts_register_callback(gatts_event_handler);
     esp_ble_gap_register_callback(gap_event_handler);
     esp_ble_gatts_app_register(ESP_HEART_RATE_APP_ID);
+    */
 
     //init tft
     init_tft();
@@ -2078,7 +2143,6 @@ void app_main()
     _fg = TFT_CYAN;
     //TFT_print("Initializing SPIFFS...", CENTER, CENTER);
     // ==== Initialize the file system ====
-    printf("\r\n\n");
     vfs_spiffs_register();
     if (!spiffs_is_mounted) {
         _fg = TFT_RED;
@@ -2088,11 +2152,44 @@ void app_main()
         _fg = TFT_GREEN;
         TFT_print("SPIFFS Mounted.", CENTER, LASTY+TFT_getfontheight()+2);
     }
+
+    //setupファイルの取得
+    readSetup();
+
     //起動画面の表示
     TFT_fillScreen(TFT_BLACK);
     //リアルタイム画像の取得
     TFT_jpg_image_get_handle(&gKuroDev, &gKuroJd, SPIFFS_BASE_PATH"/images/kuro1.jpg");
 
+    //GATT init
+    esp_bt_controller_config_t bt_cfg = BT_CONTROLLER_INIT_CONFIG_DEFAULT();
+    ret = esp_bt_controller_init(&bt_cfg);
+    if (ret) {
+        ESP_LOGE(GATTS_TABLE_TAG, "%s enable controller failed\n", __func__);
+        return;
+    }
+
+    ret = esp_bt_controller_enable(ESP_BT_MODE_BTDM);
+    if (ret) {
+        ESP_LOGE(GATTS_TABLE_TAG, "%s enable controller failed\n", __func__);
+        return;
+    }
+
+    ESP_LOGI(GATTS_TABLE_TAG, "%s init bluetooth\n", __func__);
+    ret = esp_bluedroid_init();
+    if (ret) {
+        ESP_LOGE(GATTS_TABLE_TAG, "%s init bluetooth failed\n", __func__);
+        return;
+    }
+    ret = esp_bluedroid_enable();
+    if (ret) {
+        ESP_LOGE(GATTS_TABLE_TAG, "%s enable bluetooth failed\n", __func__);
+        return;
+    }
+
+    esp_ble_gatts_register_callback(gatts_event_handler);
+    esp_ble_gap_register_callback(gap_event_handler);
+    esp_ble_gatts_app_register(ESP_HEART_RATE_APP_ID);
 
     //init encoder
     init_encoder();

@@ -18,6 +18,7 @@ typedef struct {
     char viewFg;
     float prePosLati;
     float prePosLong;
+    bool prePosEraseFg;   //true:prePosによる以前の情報クリアが有効
 } t_objInfo;
 
 typedef struct t_cell

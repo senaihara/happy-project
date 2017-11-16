@@ -95,6 +95,9 @@ static esp_ble_adv_data_t heart_rate_adv_config = {
     .set_scan_rsp = false,
     .include_name = true,
     .include_txpower = true,
+    //.min_interval = 0x00,
+    //.max_interval = 0x00,
+
     .min_interval = 0x20,
     .max_interval = 0x40,
     .appearance = 0x00,
@@ -110,6 +113,9 @@ static esp_ble_adv_data_t heart_rate_adv_config = {
 static esp_ble_adv_params_t heart_rate_adv_params = {
     .adv_int_min        = 0x20,
     .adv_int_max        = 0x40,
+    //    .adv_int_min        = 0x00,
+    //       .adv_int_max        = 0x00,
+
     .adv_type           = ADV_TYPE_IND,
     .own_addr_type      = BLE_ADDR_TYPE_PUBLIC,
     //.peer_addr            =
@@ -439,6 +445,7 @@ static void gatts_profile_event_handler(esp_gatts_cb_event_t event,
             //以前の情報のバックアップ
             gMyObj.prePosLati=gMyObj.posLati;
             gMyObj.prePosLong=gMyObj.posLong;
+            gMyObj.prePosEraseFg=true;
 
             gMyObj.id = *p;
             memcpy(latBuf, p+1, 4);
@@ -451,7 +458,7 @@ static void gatts_profile_event_handler(esp_gatts_cb_event_t event,
             DPRINT("updated myObj gLati=%f gLong=%f\n", gMyObj.posLati, gMyObj.posLong);
         }
 
-    	    //Get Map Obj
+    	    //Get Map Objj
     	    if(param->write.handle==HANDLE_MAP_OBJ){
     	         esp_ble_gatts_get_attr_value(HANDLE_MAP_OBJ,  &length, &p);
             unsigned char latBuf[4], longBuf[4], angleBuf[2];
@@ -459,7 +466,7 @@ static void gatts_profile_event_handler(esp_gatts_cb_event_t event,
             t_objInfo tmpObj;
             tmpObj.id = *(p);
             memcpy(latBuf, p+1, 4);
-            tmpObj.posLati = gMyObj.posLati = *((float*)latBuf);
+            tmpObj.posLati = *((float*)latBuf);
             memcpy(longBuf, p+5, 4);
             tmpObj.posLong = *((float*)longBuf);
             memcpy(angleBuf, p+9, 2);
@@ -477,6 +484,9 @@ static void gatts_profile_event_handler(esp_gatts_cb_event_t event,
                                (int)tmpObj.id, tmpObj.posLati, tmpObj.posLong, tmpObj.angle, (int)tmpObj.type, (int)tmpObj.typeId, (int)tmpObj.owner, (int)tmpObj.status, (int)tmpObj.enableFg, (int)tmpObj.viewFg);
 
             updateObjList(&gObjList, tmpObj);
+
+
+            printf("myObj gLati=%f gLong=%f\n", gMyObj.posLati, gMyObj.posLong);
         }
 
     	    //update holding objss
@@ -1298,6 +1308,7 @@ void drawObject(t_objInfo *obj, t_objInfo *obj_o){
      float preposx, preposy;
      calcPlaneDistance(obj->prePosLati-obj_o->prePosLati, obj->prePosLong-obj_o->prePosLong, alt, &x, &y, &z);
      calcUIPos(x, y, gPreAngle, gPreScale, &preposx, &preposy);
+     //printf("drawObject x=%f y=%f\n",x, y);
 
      calcPlaneDistance(obj->posLati-obj_o->posLati, obj->posLong-obj_o->posLong, alt, &x, &y, &z);
      DPRINT("draw Object x=%f y=%f, z=%f\n", x, y, z);
@@ -1316,6 +1327,7 @@ void drawObject(t_objInfo *obj, t_objInfo *obj_o){
 
      //TFT_jpg_image2(posx1, posy1, preposx, preposy, 0, SPIFFS_BASE_PATH"/images/kuro.jpg", NULL, 0);
      TFT_jpg_image_with_handle(posx1, posy1, preposx, preposy, 0, &gKuroDev, &gKuroJd);
+    // TFT_drawCircle(posx1, posy1, 10, gBaseColor1);
 
      //TFT_bmp_image(CENTER, CENTER, 1, SPIFFS_BASE_PATH"/images/tiger.bmp", NULL, 0);
 /*     ESP_LOGI(TAG, "Initializing SPIFFS");
@@ -1511,7 +1523,7 @@ void drawDisplay(){
             TFT_drawCircle((dispWin.x2-dispWin.x1)/2.0,(dispWin.y2-dispWin.y1)/2.0, posx1-(dispWin.x2-dispWin.x1)/2.0, TFT_BLACK);
             //sprintf(buf,"%0.0fmm\n",scale);
             //TFT_print(buf, (dispWin.x2-dispWin.x1)/2.0, posx1);
-            TFT_fillRect((dispWin.x2-dispWin.x1)/2.0, posx1, 80, TFT_getfontheight()+2, TFT_BLACK);
+            TFT_fillRect((dispWin.x2-dispWin.x1)/2.0, (dispWin.y2-dispWin.y1)/2.0+(posx1-(dispWin.x2-dispWin.x1)/2.0), 80, TFT_getfontheight()+2, TFT_BLACK);
             DPRINT("max=%f digits=%d scale=%f i=%d\n", currentMax, i, scale, i);
         }
     }
@@ -1523,7 +1535,9 @@ void drawDisplay(){
         calcUIPos(scale, 0, 0, gScale, &posx1, &posy1);
         TFT_drawCircle((dispWin.x2-dispWin.x1)/2.0,(dispWin.y2-dispWin.y1)/2.0, posx1-(dispWin.x2-dispWin.x1)/2.0, gBaseColor1);
         sprintf(buf,"%0.0fmm\n",scale);
-          TFT_print(buf, (dispWin.x2-dispWin.x1)/2.0, posx1);
+        TFT_print(buf, (dispWin.x2-dispWin.x1)/2.0, (dispWin.y2-dispWin.y1)/2.0+(posx1-(dispWin.x2-dispWin.x1)/2.0));
+
+        //TFT_drawCircle((dispWin.x2-dispWin.x1)/2.0, posx1, 10, gBaseColor1);
         DPRINT("max=%f digits=%d scale=%f i=%d\n", currentMax, i, scale, i);
     }
 
@@ -1536,10 +1550,13 @@ void drawDisplay(){
 
     //drawObject
     t_cell *tmp=&gObjList;
+    cnt = 0;
     while (tmp->next != NULL) {
         tmp = tmp->next;
         drawObject(&(tmp->node), &gMyObj);
         DPRINT("[cnt=%d id=%d] ",cnt, tmp->node.id);
+        printf("drawobject cnt=%d id=%d lat=%f long=%f\n",cnt, tmp->node.id, tmp->node.posLati,tmp->node.posLong);
+        cnt++;
     }
 
 /*
@@ -1638,35 +1655,35 @@ void updateCompasAndScale(){
     static int rawX, rawY;
 
     mpu9250_mag_update(&mpu9250_data);
-    printf("originValues:%03d %03d %03d  magValues: %03d %03d %03d\n",
+    /*printf("originValues:%03d %03d %03d  magValues: %03d %03d %03d\n",
     mpu9250_mag_get(&mpu9250_data, 1, 0),
     mpu9250_mag_get(&mpu9250_data, 3, 2),
     mpu9250_mag_get(&mpu9250_data, 5, 4),
     mpu9250_mag_x(&mpu9250_data),
     mpu9250_mag_y(&mpu9250_data),
     mpu9250_mag_z(&mpu9250_data));
-
+*/
     medianBufferX[medianBufferIndexX] = mpu9250_mag_get(&mpu9250_data, 1, 0);
     medianBufferIndexX = (medianBufferIndexX + 1)%MEDIAN_BUFFER_LEN;
     rawX = smoothByMedianFilter(medianBufferX);
-    printf("rawX1=%d",rawX);
+    //printf("rawX1=%d",rawX);
 
     meanBufferX[meanBufferIndexX] = rawX;
     meanBufferIndexX = (meanBufferIndexX + 1)%MEAN_BUFFER_LEN;
     rawX = smoothByMeanfilter(meanBufferX, MEAN_BUFFER_LEN);
-    printf(" rawX2=%d",rawX);
+   // printf(" rawX2=%d",rawX);
 
     medianBufferY[medianBufferIndexY] = mpu9250_mag_get(&mpu9250_data, 3, 2);
     medianBufferIndexY = (medianBufferIndexY + 1)%MEDIAN_BUFFER_LEN;
     rawY = smoothByMedianFilter(medianBufferY);
-    printf(" rawY1=%d",rawY);
+    // printf(" rawY1=%d",rawY);
 
-    //mpu9250_mag_get(&mpu9250_data, 5, 4);
+   // //mpu9250_mag_get(&mpu9250_data, 5, 4);
 
     meanBufferY[meanBufferIndexY] = rawY;
     meanBufferIndexY = (meanBufferIndexY + 1)%MEAN_BUFFER_LEN;
     rawY = smoothByMeanfilter(meanBufferY, MEAN_BUFFER_LEN);
-    printf(" rawY2=%d",rawY);
+   // printf(" rawY2=%d",rawY);
 
     //printf(" COMPAS_MIN_X=%d COMPAS_MAX_X=%d COMPAS_MIN_Y=%d COMPAS_MAX_Y\n",);
 
@@ -1687,13 +1704,13 @@ void updateCompasAndScale(){
 
     gMyObj.angle = (short)gAngle;
     DPRINT("compasX=%f, compasY=%f, gAngle=%f\n", compasX, compasY, gAngle);
-    printf("compasX=%f, compasY=%f, gAngle=%f\n", compasX, compasY, gAngle);
+   // printf("compasX=%f, compasY=%f, gAngle=%f\n", compasX, compasY, gAngle);
 
     //update gScale;
     gPreScale= gScale;
     gScale = 1.0-0.1*gEnCnt;
-    if(gScale<0.1){
-        gScale= 0.1;
+    if(gScale<0.01){
+        gScale= 0.01;
     }
 }
 
@@ -1721,6 +1738,26 @@ void procRadar(){
         }
         updateCompasAndScale();
         drawDisplay();
+        //一度、以前の座標での描画クリアが行われたら、
+        /*if(gMyObj.prePosEraseFg==true){
+            gMyObj.prePosEraseFg=false;
+        }*/
+
+        //prePos情報を更新する 但し、座標が切り替わった直後で、以前の座標での描画クリアが行われていない時には、prePos情報を更新しない。
+        //if(gMyObj.prePosEraseFg==false){
+        if(gMyObj.prePosLati!=gMyObj.posLati || gMyObj.prePosLong!=gMyObj.posLong){
+            gMyObj.prePosLati=gMyObj.posLati;
+            gMyObj.prePosLong=gMyObj.posLong;
+        }
+        //Objectも同様に対応する
+        t_cell *tmp=&gObjList;
+         while (tmp->next != NULL) {
+            tmp = tmp->next;
+            if(tmp->node.prePosLati!=tmp->node.posLati || tmp->node.prePosLong!=tmp->node.posLong){
+                tmp->node.prePosLati=tmp->node.posLati;
+                tmp->node.prePosLong=tmp->node.posLong;
+            }
+         }
     }
 }
 
@@ -2159,7 +2196,7 @@ void app_main()
     //起動画面の表示
     TFT_fillScreen(TFT_BLACK);
     //リアルタイム画像の取得
-    TFT_jpg_image_get_handle(&gKuroDev, &gKuroJd, SPIFFS_BASE_PATH"/images/kuro1.jpg");
+    TFT_jpg_image_get_handle(&gKuroDev, &gKuroJd, SPIFFS_BASE_PATH"/images/kuro2.jpg");
 
     //GATT init
     esp_bt_controller_config_t bt_cfg = BT_CONTROLLER_INIT_CONFIG_DEFAULT();

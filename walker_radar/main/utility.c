@@ -230,7 +230,7 @@ void objListTest(){
 }
 
 void calcPlaneDistance(float lat, float lon, float alt, float *x, float *y, float*z){
-    float latCoefd = 0.011118;
+    float latCoefd = 0.011118; //経度で0.011118のザブンが、実際の距離では、1234.428m異なります。
     float latCoefm = 1234.428;
     float longCoefd = 0.015493;
     float longCoefm = 1386.226;
@@ -238,7 +238,7 @@ void calcPlaneDistance(float lat, float lon, float alt, float *x, float *y, floa
     *y=lat/latCoefd;
     *y=*y*latCoefm;
 
-    *x=-1.0*lon/longCoefd;
+    *x=1.0*lon/longCoefd;
     *x=*x*longCoefm;
 
     *z=0;
@@ -573,10 +573,12 @@ void TFT_jpg_image_with_handle(int x, int y, int prex, int prey, int scale, JPGI
     if (y == CENTER) y = ((dispWin.y2 - dispWin.y1 + 1 - (int)(jd->height >> scale)) / 2) + dispWin.y1;
     else if (y == BOTTOM) y = dispWin.y2 + 1 - (int)(jd->height >> scale);
 
+    /*
     if (x < ((dispWin.x2-1) * -1)) x = (dispWin.x2-1) * -1;
     if (y < ((dispWin.y2-1)) * -1) y = (dispWin.y2-1) * -1;
     if (x > (dispWin.x2-1)) x = dispWin.x2 - 1;
     if (y > (dispWin.y2-1)) y = dispWin.y2-1;
+*/
 
     //ファイルカーソルを最初に戻す必要あり。
     rewind(dev->fhndl);
@@ -590,17 +592,25 @@ void TFT_jpg_image_with_handle(int x, int y, int prex, int prey, int scale, JPGI
     rc = jd_prepare(jd, tjd_input, (void *)work, sz_work, dev);
 
     if(x!=prex || y!=prey){
-    TFT_fillRect(prex-jd->width/2, prey-jd->height/2, jd->width, jd->height, TFT_BLACK);
-               //printf("width=%d height=%d scale=%d\n",jd.width,jd.height,scale);
+        //TFT_fillRect(prex-jd->width/2, prey-jd->height/2, jd->width, jd->height, TFT_BLACK);
+       //画面範囲以内の時に対応する
+        if(dispWin.x1< prex && prex < dispWin.x2 && dispWin.y1< prey && prey < dispWin.y2){
+            TFT_fillRect(prex-jd->width/2, prey-jd->height/2, jd->width, jd->height, TFT_BLACK);
+        }
+
+        //printf("width=%d height=%d scale=%d\n",jd.width,jd.height,scale);
+    }
+    //範囲ないの時に表示する
+    if(dispWin.x1< x && x < dispWin.x2 && dispWin.y1< y && y < dispWin.y2){
+        dev->x = x-jd->width/2;
+        dev->y = y-jd->height/2;
+
+       // Start to decode the JPEG file
+       disp_select();
+       rc = jd_decomp(jd, tjd_output, scale);
+       disp_deselect();
     }
 
-    dev->x = x-jd->width/2;
-    dev->y = y-jd->height/2;
-
-   // Start to decode the JPEG file
-   disp_select();
-   rc = jd_decomp(jd, tjd_output, scale);
-   disp_deselect();
 
 exit:
    if (work) free(work);  // free work buffer

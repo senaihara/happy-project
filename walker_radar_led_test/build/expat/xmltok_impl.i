@@ -1,5 +1,0 @@
-# 1 "/Users/Sentaro/esp/esp-idf/components/expat/library/xmltok_impl.c"
-# 1 "/Users/Sentaro/GitHub/happy-project/walker_radar_led_test/build/expat//"
-# 1 "<built-in>"
-# 1 "<command-line>"
-# 1 "/Users/Sentaro/esp/esp-idf/components/expat/library/xmltok_impl.c"

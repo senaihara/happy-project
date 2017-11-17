@@ -1,5 +1,0 @@
-# 1 "/Users/Sentaro/esp/esp-idf/components/bt/bluedroid/btc/core/btc_sec.c"
-# 1 "/Users/Sentaro/GitHub/happy-project/walker_radar_led_test/build/bt//"
-# 1 "<built-in>"
-# 1 "<command-line>"
-# 1 "/Users/Sentaro/esp/esp-idf/components/bt/bluedroid/btc/core/btc_sec.c"

@@ -3,7 +3,7 @@
 <head>
   <meta charset=utf-8>
   <meta name="viewport" content="width=device-width,initial-scale=1.0, user-scalable=yes">
-  <title>walker_radar</title>
+  <title>stamp_radar</title>
 
 <script type="text/javascript" src="https://ajax.googleapis.com/ajax/libs/jquery/1.10.1/jquery.min.js"></script>
 <script src="https://maps.googleapis.com/maps/api/js?callback=initMap" async defer></script>
@@ -17,7 +17,7 @@
             this.posAlt = posAlt;
             this.angle = angle;
             this.type = type;
-            this.typeiId = typeId;
+            this.typeId = typeId;
             this.owner = owner;
             this.statusFg = statusFg;
             this.enableFg = enableFg;
@@ -81,7 +81,7 @@
     
     //画面への表示情報の更新
     function updateInfo(){
-        var g_txt ="count=" +gCount+ " id:"+gMyObj.id+"<br>"+"lati：" + gMyObj.pos_lat;
+        var g_txt ="id="+gMyId+" count=" +gCount+ " id:"+gMyObj.id+"<br>"+"lati：" + gMyObj.pos_lat;
         g_txt += " long：" + gMyObj.pos_long + "<br>";
         g_txt += "angle：" + gMyObj.angle + "<br>";  
         g_txt += "alt：" + gMyObj.pos_alt + " m<br>";
@@ -169,6 +169,14 @@
             
             navigator.bluetooth.requestDevice({filters: [{services: [SERVICE_UUID]}]})
             .then(device => {
+                //console.log("デバイスを取得しました", device);
+                //名前からidを取得する。
+                //var deviceName = device.name;
+                var id = device.name.substr(device.name.length-2, device.name.length);
+                log('deviceName='+device.name+' id='+id);
+                gMyId = Number(id);
+                updateInfo();
+                    
                 log('Connecting to GATT Server...');
                 gDevice = device;
                 return device.gatt.connect();
@@ -253,7 +261,11 @@
                             }
                             log('getobj notify ' + a.join(' '));
                             
-                            getid = value.getUint8(0).toString(16);
+                            //getid = parseInt(value.getUint8(0),16);
+                            getid = value.getUint8(0).toString(10);
+                            log('getid=' + getid);
+                            
+                 
                             
                             addGetObjToDB(getid);
                             
@@ -511,7 +523,7 @@
         }
         
         //サーバへの現在位置の更新 
-        $.getJSON('https://160.16.116.250/walker/api/update_cur_pos.php',
+        $.getJSON('https://160.16.116.250/stamp_radar/api/update_cur_pos.php',
         {id:gMyId, pos_lat:gMyObj.pos_lat, pos_long:gMyObj.pos_long, pos_alt:gMyObj.pos_alt, pos_angle:gMyObj.angle })
         .done(function(data) {
             var len = data.length;
@@ -576,7 +588,7 @@
     function updateObjs(){
         //DBからオブジェクトの受信
         //サーバへの現在位置の更新 
-        $.getJSON('https://160.16.116.250/walker/api/search_objs.php',
+        $.getJSON('https://160.16.116.250/stamp_radar/api/search_objs.php',
         {id:gMyObj.id})
         .done(function(data) {
             //alert('getdata')
@@ -584,6 +596,8 @@
             log("search_obj.php len="+len);
             for(var i = 0; i < len; i++) {
                 tmpObj = new WalkerObj(data[i].id, data[i].pos_lat, data[i].pos_long, data[i].pos_alt, data[i].angle, data[i].type, data[i].type_id, data[i].owner, data[i].status_fg, data[i].enable_fg, data[i].delete_fg);
+               log("updateObj i="+i+" objId="+data[i].id+" type="+data[i].type+" typeId="+data[i].type_id);
+               log("updateObj2 i="+i+" objId="+tmpObj.id+" type="+tmpObj.type+" typeId="+tmpObj.typeId);
                 
                 //check existance
                 var fg = 0;
@@ -616,9 +630,9 @@
     function putObjToDB(walkerObj){
         //DBからオブジェクトの受信
         //サーバへの現在位置の更新
-        // $.getJSON('https://160.16.116.250/walker/api/update_cur_pos.php',
+        // $.getJSON('https://160.16.116.250/stamp_radar/api/update_cur_pos.php',
         //{id:gMyId, pos_lat:gMyObj.pos_lat, pos_long:gMyObj.pos_long, pos_alt:gMyObj.pos_alt, pos_angle:gMyObj.angle })
-        $.getJSON('https://160.16.116.250/walker/api/put_obj.php',
+        $.getJSON('https://160.16.116.250/stamp_radar/api/put_obj.php',
         {pos_lat:walkerObj.posLat, pos_long:walkerObj.posLong, pos_alt:0, type:walkerObj.type, type_id:walkerObj.typeId, owner:walkerObj.owner})
         .done(function(data) {
             var len = data.length;
@@ -632,7 +646,7 @@
     //DBに対して取得objectを追加する
     function addGetObjToDB(objId){
         //DBに対して取得objIDの通知
-        $.getJSON('https://160.16.116.250/walker/api/get_obj.php',
+        $.getJSON('https://160.16.116.250/stamp_radar/api/get_obj.php',
         {holder_id:gMyObj.id, obj_id:objId})
         .done(function(data) {
             var len = data.length;
@@ -671,7 +685,7 @@
     //レーダーに対して、現在保持しているObj情報の更新を行う。
     function updateHoldingObjs(){
         //DBから現在保持しているオブジェクト情報を取得する。
-        $.getJSON('https://160.16.116.250/walker/api/get_holding_objs.php',
+        $.getJSON('https://160.16.116.250/stamp_radar/api/get_holding_objs.php',
         {holder_id:gMyObj.id})
         .done(function(data) {
             //Radarの保持項目リストを更新する。(今のところは、idだけにしましょう)

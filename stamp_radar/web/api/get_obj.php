@@ -56,7 +56,7 @@ if (is_null($holder_id) || is_null($obj_id)) {
 }
 
 //check obj_id information
-
+error_log("holderid=$holder_id obj_id=$obj_id");
 $sql = "select * from objects where id = $obj_id";
 $dbh = connectDb();
 $stmt= $dbh->query($sql);

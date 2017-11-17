@@ -65,7 +65,7 @@
 #define HEART_PROFILE_NUM 			    1
 #define HEART_PROFILE_APP_IDX 			0
 #define ESP_HEART_RATE_APP_ID			0x55
-#define SAMPLE_DEVICE_NAME              "WakerRadar"
+#define SAMPLE_DEVICE_NAME              "StampRadar"
 #define SAMPLE_MANUFACTURER_DATA_LEN    17
 #define HEART_RATE_SVC_INST_ID	    	0
 
@@ -378,6 +378,8 @@ int gHoldingObjIdList[32];
 int gPreGPIOES=0;
 
 int gSelectedStamp=0;
+
+#define MAX_STAMP_NUM 20
 
 //ObjectType一覧
 #define OBJ_TYPE_WALKER 1
@@ -708,7 +710,10 @@ static void notifyGetObject(int objId) {
     //esp_ble_gatts_get_attr_value(HANDLE_PUT_OBJ,  &length, &prf_char);
     char tmpBuf[1];
     char *bufP = tmpBuf;
-    memcpy(bufP, (short*)(&objId),1);
+    memcpy(bufP, (char*)(&objId),1);
+    printf("notifyGetObject objId=%d buf=%s\n", objId, tmpBuf);
+    printf("aaaaa\n");
+
 
     esp_ble_gatts_send_indicate(gatts_if_for_indicate, 0, attr_handle,
             sizeof(tmpBuf), &tmpBuf, false);
@@ -1702,14 +1707,14 @@ void updateCompasAndScale(){
     static int rawX, rawY;
 
     mpu9250_mag_update(&mpu9250_data);
-    /*printf("originValues:%03d %03d %03d  magValues: %03d %03d %03d\n",
+    printf("originValues:%03d %03d %03d  magValues: %03d %03d %03d\n",
     mpu9250_mag_get(&mpu9250_data, 1, 0),
     mpu9250_mag_get(&mpu9250_data, 3, 2),
     mpu9250_mag_get(&mpu9250_data, 5, 4),
     mpu9250_mag_x(&mpu9250_data),
     mpu9250_mag_y(&mpu9250_data),
     mpu9250_mag_z(&mpu9250_data));
-*/
+
     medianBufferX[medianBufferIndexX] = mpu9250_mag_get(&mpu9250_data, 1, 0);
     medianBufferIndexX = (medianBufferIndexX + 1)%MEDIAN_BUFFER_LEN;
     rawX = smoothByMedianFilter(medianBufferX);
@@ -1791,7 +1796,7 @@ void procExecStamp(){
         }
 
         timersub(&curTime, &sTime, &dTime);
-        if(dTime.tv_sec > 1){
+        if(dTime.tv_sec > 0){
             t_objInfo *obj= getObjByType(&gHoldingObjList, OBJ_TYPE_STAMP, gSelectedStamp);
            if(obj==NULL){
                printf("%s getObjByTypeError %d %d\n",__func__, OBJ_TYPE_STAMP, gSelectedStamp);
@@ -1926,13 +1931,13 @@ void showMainMenu(int itemNum, int labelLen, char itemName[itemNum][labelLen],in
          _bg = gBaseColor1;
         int fwidth,fheight;
         TFT_getfontsize(&fwidth, &fheight);
-        char p[1]="";
+        char p[1]=" ";
         p[0]=itemName[i][0];
         TFT_print(p, x-25, y-10);
         for(int j=1; j<strlen(itemName[i]); j++){
             p[0] = itemName[i][j];
             //TFT_print(itemName[i], x-strlen(itemName[i])/4*fwidth, y);
-            printf("char=%c\n",p[0]);
+            //printf("char=%c\n",p[0]);
             if(p[0]=='\n'){
                 printf("find LF\n");
                 TFT_print("", x-25, LASTY+TFT_getfontheight());
@@ -2006,8 +2011,8 @@ int getNearStampId(){
         tmp = tmp->next;
         calcPlaneDistance(gMyObj.posLati-tmp->node.posLati, gMyObj.posLong-tmp->node.posLong, alt, &x, &y, &z);
         dist=sqrt(x*x+y*y);
-        printf("%s id=%d obj distance=%f\n",__func__,tmp->node.id, dist);
-        if(tmp->node.type==OBJ_TYPE_STAMP && dist<minDist){
+        printf("%s objid=%d  type=%d stampid=%d obj distance=%f\n",__func__,tmp->node.id, tmp->node.type, tmp->node.typeId, dist);
+        if(tmp->node.type==OBJ_TYPE_STAMP && dist<minDist && (0<tmp->node.typeId && tmp->node.typeId <=MAX_STAMP_NUM)){
             minDist=dist;
             minId=tmp->node.id;
             minTypeId=tmp->node.typeId;
@@ -2033,7 +2038,7 @@ void procStampSheet(){
 
     //周辺のオブジェクトのチェック、スタンプの場合には、取得できる。
     int objId = getNearStampId();
-    if(objId<=0){
+    if(objId<=0 && objId < MAX_STAMP_NUM){
         _fg = TFT_WHITE;
         _bg = TFT_BLACK;
         TFT_setFont(DEJAVU18_FONT, NULL);
@@ -2053,6 +2058,8 @@ void procStampSheet(){
 
     //Stamp催促メッセージの表示
     TFT_fillScreen(TFT_BLACK);
+    _fg = TFT_WHITE;
+    _bg = TFT_BLACK;
     TFT_setFont(DEJAVU18_FONT, NULL);
     TFT_print("Find  Stamp!.", CENTER, CENTER);
     TFT_print("Please push stamp here!!", CENTER, LASTY+TFT_getfontheight()+2);
@@ -2075,6 +2082,7 @@ void procStampSheet(){
                 TFT_print("Time out", CENTER, CENTER);
                 vTaskDelay(3000 / portTICK_RATE_MS);
             }
+            TFT_fillScreen(TFT_BLACK);
             return;
         }
 
@@ -2110,6 +2118,11 @@ void procStampSheet(){
 
                 //DBへの反映
                notifyGetObject(gObj->id);
+
+               vTaskDelay(3000 / portTICK_RATE_MS);
+
+               TFT_fillScreen(TFT_BLACK);
+               return;
             }
             prevalbs = valbs;
         }
@@ -2176,7 +2189,6 @@ void procStampLib(){
 
     //選択しているものを中央に表示
     int val,preEnCnt=gEnCnt,selectIndex=1;
-    int maxStampNum=20;
     int valbs = 0, prevalbs=0;
     showStampLib(selectIndex);
     while(1){
@@ -2193,13 +2205,13 @@ void procStampLib(){
        if(gEnCnt!=preEnCnt){
            if(gEnCnt>preEnCnt){
                selectIndex++;
-               if(selectIndex>maxStampNum){
+               if(selectIndex>MAX_STAMP_NUM){
                    selectIndex=1;
                }
            }else{
                selectIndex--;
                if(selectIndex<1){
-                   selectIndex=maxStampNum;
+                   selectIndex=MAX_STAMP_NUM;
                }
            }
            showStampLib(selectIndex);
@@ -2343,20 +2355,22 @@ void app_main()
     //TFT_print("Initializing SPIFFS...", CENTER, CENTER);
     // ==== Initialize the file system ====
     vfs_spiffs_register();
-    if (!spiffs_is_mounted) {
+    /*if (!spiffs_is_mounted) {
         _fg = TFT_RED;
         TFT_print("SPIFFS not mounted !", CENTER, LASTY+TFT_getfontheight()+2);
     }
     else {
         _fg = TFT_GREEN;
         TFT_print("SPIFFS Mounted.", CENTER, LASTY+TFT_getfontheight()+2);
-    }
+    }*/
 
     //setupファイルの取得
     readSetup();
 
     //起動画面の表示
     TFT_fillScreen(TFT_BLACK);
+    procStart();
+
     //リアルタイム画像の取得
     TFT_jpg_image_get_handle(&gKuroDev, &gKuroJd, SPIFFS_BASE_PATH"/images/kuro2.jpg");
     TFT_jpg_image_get_handle(&gKuroGDev, &gKuroGJd, SPIFFS_BASE_PATH"/images/kuro2_g.jpg");
@@ -2397,6 +2411,8 @@ void app_main()
 
     //init encoder
     init_encoder();
+    //vTaskDelay(1000 / portTICK_RATE_MS);
+
 
     //init compass
     mpu9250_mag_begin(&mpu9250_data);
@@ -2412,8 +2428,9 @@ void app_main()
     gMyObj.prePosLati = gMyObj.posLati;
     gMyObj.prePosLong = gMyObj.posLong;
 
+    //初期スタンプで猫ちゃんは入れておく
     t_objInfo tmpObj;
-    tmpObj.posLati = 36.549160;
+    tmpObj.posLati = 36.5499/60;
     tmpObj.posLong = 139.880458;
     tmpObj.id=255;
     tmpObj.type=OBJ_TYPE_STAMP;
@@ -2421,9 +2438,9 @@ void app_main()
     tmpObj.owner=gMyObj.id;
     gSelectedStamp=tmpObj.typeId;
 
-    updateObjList(&gObjList, tmpObj);
+//    updateObjList(&gObjList, tmpObj);
     updateObjList(&gHoldingObjList, tmpObj);
-
+/*
     tmpObj.posLati = 36.549160;
     tmpObj.posLong = 139.880458;
     tmpObj.id=254;
@@ -2432,14 +2449,14 @@ void app_main()
     tmpObj.owner=gMyObj.id;
     gSelectedStamp=tmpObj.typeId;
     updateObjList(&gHoldingObjList, tmpObj);
-
+*/
     //GATT更新用の時間
     time_t updateGATTTime=0, preUpdateGATTTime=0;
 
   //LED
    xTaskCreate(ws2812_task, "gpio_task", 12288, NULL, 5, NULL);
     //ws2812_test();
-    gMode = MODE_STAMP_LIB;
+    //gMode = MODE_STAMP_LIB;
 
     int preMenuEnCng=0;
     while (1) {
@@ -2453,7 +2470,6 @@ void app_main()
         }
         printf("current mode =%d\n",gMode);
         if(gMode == MODE_START){
-            procStart();
             gMode = MODE_RADAR;
         }else if(gMode==MODE_RADAR){
             gLEDMode = LED_MODE_NONE;

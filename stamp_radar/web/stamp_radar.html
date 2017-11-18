@@ -52,7 +52,7 @@
     var gCharaHoldingObjs = {};
     var gDevice = null;
     var gService = {};
-    var gMyId = 1;    
+    //var gMyId = 1;    
     var gGattModeFg=0;
     var gMyObj = new WalkerObj();
     gMyObj.id = 1;
@@ -61,7 +61,10 @@
     var gAccuracy=0;
     var gMapObj=null;
     var gMarkerArray;// = new google.maps.MVCArray();
-    var gTimerSwitch = true;
+    var gTimerSwitch = false;
+    var gWriteCupPosQueue = new Array(); //GATT書き込みキュー(CurPos)
+    var gReadCurAngleQueue = new Array(); //GATT読み込みキュー(CurAngle)
+    var gWriteMapObjQueue = new Array(); //GATT書き込みキュー(Obj)
      
     function initMap() {             // google maps Javascript と同期
         if (navigator.geolocation) {   // 現在の位置情報を取得する
@@ -81,13 +84,21 @@
     
     //画面への表示情報の更新
     function updateInfo(){
-        var g_txt ="id="+gMyId+" count=" +gCount+ " id:"+gMyObj.id+"<br>"+"lati：" + gMyObj.pos_lat;
+        var g_txt ="count=" +gCount+ " id:"+gMyObj.id+"<br>"+"lati：" + gMyObj.pos_lat;
         g_txt += " long：" + gMyObj.pos_long + "<br>";
         g_txt += "angle：" + gMyObj.angle + "<br>";  
         g_txt += "alt：" + gMyObj.pos_alt + " m<br>";
         g_txt += "accuracy：" + gAccuracy + " m<br>";
         document.getElementById("txt_result").innerHTML = g_txt; // 位置の書き出し
         gCount+=1;
+        
+        //switchボタンの表示も切り替える
+        if(gTimerSwitch){
+            document.getElementById("timer_switch").value = "timer switch on";
+        }else{
+            document.getElementById("timer_switch").value = "timer switch off";
+  
+        }
         
         var latlng = new google.maps.LatLng( gMyObj.pos_lat,gMyObj.pos_long );        // 地図の中心
         var marker = new google.maps.Marker( { map:gMapObj , position:latlng } );  // マーカーセット
@@ -148,10 +159,12 @@
         
         setInterval(function(){
             if(gTimerSwitch){
-                if(gGattModeFg%2==0){
-                    updateCurPosAll();
-                }else if(gGattModeFg%2==1){
-                    getRadarAngleFromRadar(50);
+                if(gGattModeFg%3==0){
+                    updateCurPosToAll();
+                }else if(gGattModeFg%3==1){
+                    getRadarAngleFromRadar();
+                }else if(gGattModeFg%3==2){
+                    updateObjs();
                 }
                 updateInfo();
                 gGattModeFg+=1;
@@ -174,7 +187,7 @@
                 //var deviceName = device.name;
                 var id = device.name.substr(device.name.length-2, device.name.length);
                 log('deviceName='+device.name+' id='+id);
-                gMyId = Number(id);
+                gMyObj.id = Number(id);
                 updateInfo();
                     
                 log('Connecting to GATT Server...');
@@ -329,7 +342,7 @@
    
 	//自分の座標位置の更新                          
         $('#update_pos').click(function(){
-            updateCurPosAll(50);
+            updateCurPosToAll();
             updateInfo();
         })
 
@@ -419,7 +432,7 @@
         })
          $('#read_angle').click(function(){
           
-            getRadarAngleFromRadar(1);
+            getRadarAngleFromRadar();
             updateInfo(); 
             
             return;
@@ -428,7 +441,7 @@
           
             //putObjToDB(gMyObj);
             //getRadarAngleFromRadar(50);
-            updateCurPos2Radar(20);
+            //updateCurPos2Radar();
             updateInfo(); 
             
             return;
@@ -437,7 +450,7 @@
     //jQuery end
     
     //Radarへの現在位置の更新
-    function updateCurPos2Radar(retryCount){
+    function updateCurPos2Radar(){
         if(gDevice==null || gCharaCurPos == null || gCharaCurPos==null){
             log("gDevice or gCharaCurPos = null");
             return;
@@ -466,7 +479,7 @@
         var arrayLong = new Int8Array(f2.buffer);
                  
         var sendBuf = new Int8Array(9);
-        sendBuf[0] = gMyId;
+        sendBuf[0] = gMyObj.id;
         sendBuf[1] = arrayLati[0];
         sendBuf[2] = arrayLati[1];
         sendBuf[3] = arrayLati[2];
@@ -475,7 +488,7 @@
         sendBuf[6] = arrayLong[1];
         sendBuf[7] = arrayLong[2];
         sendBuf[8] = arrayLong[3];
-        
+        /*
         gCharaCurPos.writeValue(sendBuf)
         .catch(error => {
             retryCount--;
@@ -486,13 +499,37 @@
             log("write error");
             return Promise.reject(error);
         });
+        */
+        gWriteCupPosQueue.push(sendBuf);
+        
+        var loopFunc = function (){
+            if(gWriteCupPosQueue.length <=0 )
+                return;
+            
+            log("write array"+gWriteCupPosQueue[0]);
+                
+            gCharaCurPos.writeValue(gWriteCupPosQueue[0])
+            .catch(error => {
+                log("write error. "+gWriteMapObjQueue[0]);
+                return;
+            })
+            .then(_ => {
+                log("write ok. exec shift="+gWriteCupPosQueue[0]);
+                gWriteCupPosQueue.shift();
+             })
+            
+            setTimeout(loopFunc, 200);
+        }
+        loopFunc();   
+        
     }
     
-    function getRadarAngleFromRadar(retryCount){
+    function getRadarAngleFromRadar(){
         if(gDevice==null || gCharaCurPos == null){
             log("gDevice or gCharaCurPos = null");
             return;
         }
+        /*
         gCharaCurPos.readValue()
         .then((val) => {
             var buffer = new ArrayBuffer(2);
@@ -503,19 +540,39 @@
             //log("gMyObj.angle="+gMyObj.angle);
         })
         .catch(error => {
-            retryCount--;
             log("getRadarAngle retryCount"+retryCount)
-            if (retryCount > 0) {
-                return getRadarAngleFromRadar(retryCount);
-            }
             log("read radapos error.");
             return Promise.reject(error);
         });
+        */
+    
+        gReadCurAngleQueue.push("1");
+        var loopFunc = function (){
+            if(gReadCurAngleQueue.length <=0 )
+                return;
+            
+            gCharaCurPos.readValue()
+            .then((val) => {
+                var buffer = new ArrayBuffer(2);
+                var dataView = new DataView(buffer);
+                dataView.setUint8(0, parseInt(val.getUint8(9).toString(16),16));
+                dataView.setUint8(1, parseInt(val.getUint8(10).toString(16),16));
+                gMyObj.angle = dataView.getUint16(0, true);
+                //log("gMyObj.angle="+gMyObj.angle);
+                gReadCurAngleQueue.shift();
+            })      
+            .catch(error => {
+                log("read anble error. "+gReadCurAngleQueue[0]);
+                return;
+            })
+            setTimeout(loopFunc, 200);
+        }
+        loopFunc();
     }
     
-    function updateCurPosAll(){ 
+    function updateCurPosToAll(){ 
         //Radarへの現在位置の更新
-        updateCurPos2Radar(50);
+        updateCurPos2Radar();
         
         if(gMyObj.pos_lat==null || gMyObj.pos_long == null || gMyObj.angle==null){
             log("gMyObj not initialized");
@@ -524,7 +581,7 @@
         
         //サーバへの現在位置の更新 
         $.getJSON('https://160.16.116.250/stamp_radar/api/update_cur_pos.php',
-        {id:gMyId, pos_lat:gMyObj.pos_lat, pos_long:gMyObj.pos_long, pos_alt:gMyObj.pos_alt, pos_angle:gMyObj.angle })
+        {id:gMyObj.id, pos_lat:gMyObj.pos_lat, pos_long:gMyObj.pos_long, pos_alt:gMyObj.pos_alt, pos_angle:gMyObj.angle })
         .done(function(data) {
             var len = data.length;
             for(var i = 0; i < len; i++) {
@@ -537,7 +594,11 @@
     }
     
     //Radarへのオブジェクトの更新
-    function updateObjs2Radar(walkerObj, retryCount){
+    function updateObjs2Radar(){
+     var status = new Int8Array(gObjList.length);
+       
+        for(var i=0; i<gObjList.length; i++){
+            walkerObj = gObjList[i];
         var f1 = new Float32Array(1);
         f1[0] = walkerObj.posLat;
         var arrayLati = new Int8Array(f1.buffer)
@@ -571,17 +632,46 @@
         sendBuf[15] = walkerObj.enableFg;//enableFg
         sendBuf[16] = walkerObj.viewFg;//viewFg
         
-        //log("update obj sendBuf "+sendBuf);
-        return gCharaMapObj.writeValue(sendBuf)
-       .catch(error => {
-            retryCount--;
-            log("retryCount"+retryCount)
-            if (retryCount > 0) {
-                return updateObjs2RadarAll(retryCount);
+            /*
+            //log("update obj sendBuf "+sendBuf);
+            return gCharaMapObj.writeValue(sendBuf)
+           .catch(error => {
+                retryCount--;
+                log("retryCount"+retryCount)
+                if (retryCount > 0) {
+                    return updateObjs2RadarAll(retryCount);
+                }
+                log("write error");
+                return Promise.reject(error);
+            });*/
+        
+            gWriteMapObjQueue.push(sendBuf);  
+        }
+        
+        var loopFunc = function (){
+            if (gWriteMapObjQueue.length <=0) {
+                log("exec all ok");
+                return;
             }
-            log("write error");
-            return Promise.reject(error);
-        });   
+            
+            log("write array"+gWriteMapObjQueue[0]);
+                
+            gCharaMapObj.writeValue(gWriteMapObjQueue[0])
+            .catch(error => {
+                log("write error. "+gWriteMapObjQueue[0]);
+                return;
+            })
+            .then(_ => {
+                log("write ok. exec shift="+gWriteMapObjQueue[0]);
+                gWriteMapObjQueue.shift();
+                //status[i] = 1;
+                //log("write ok i="+i+"status="+status[i]+" walkerid="+walkerObj.id+" result="+_);
+             })
+            
+            
+            setTimeout(loopFunc, 200);
+        }
+        loopFunc();   
     }
 
      //Radarへのオブジェクトの更新 まとめて送信
@@ -628,7 +718,9 @@
         
         //var status = false;
         var status = new Int8Array(1);
-        loopSleep(10, 1000, status, function(i){
+        status[0] = false;
+        loopSleep(10, 200, status, function(i){
+            log("write obj="+walkerObj.id);
             gCharaMapObj.writeValue(sendBuf)
             .catch(error => {
                 return;
@@ -687,10 +779,11 @@
             }
             
             //radarへの更新処理
-            /*for(var i = 0; i < gObjList.length; i++) {
-            updateObjs2Radar(gObjList[i], 50);
-            }*/
-            updateObjs2RadarAll(50);
+            //for(var i = 0; i < gObjList.length; i++) {
+            //updateObjs2Radar(gObjList[i]);
+            updateObjs2Radar();
+            //}
+            //updateObjs2RadarAll();
             
         }); 
     }
@@ -824,22 +917,31 @@
         return Array.from(new Uint8Array(buffer)).reverse();  // reverse to get little endian
     }
     
-    function loopSleep(_loopLimit,_interval, _status, _mainFunc){
+    /*function objectUpdater(_loopLimit,_interval, _status, _statusIndex, _mainFunc){
+        //キューの中身がなくなるまで実行する
+        
+        //順次実行して、前の物が終わったら、次の物を実行する。
+        
+    
+    }*/
+    
+    
+    function loopSleep(_loopLimit,_interval, _status, _statusIndex, _mainFunc){
         var loopLimit = _loopLimit;
         var interval = _interval;
         var mainFunc = _mainFunc;
-        var i = 0;
+        var ii = 0;
         var loopFunc = function (){
             //var result = mainFunc(i);
-            //log("status="+_status[0]);
-            if (_status[0] == true) {
+            log("status="+_status[_statusIndex]+" statusIndex="+_statusIndex);
+            if (_status[_statusIndex] == 1) {
                 return;
             }
-            i = i + 1;
-            if (i < loopLimit) {
+            ii = ii + 1;
+            if (ii < loopLimit) {
                 setTimeout(loopFunc, interval);
             }
-            var result = mainFunc(i);
+            var result = mainFunc(ii);
         }
         loopFunc();
     }
@@ -937,7 +1039,7 @@
     
     <input type="button" id="ble_connect" value="ble connect"/>
     <input type="button" id="ble_disconnect" value="ble disconnect"/><br/>
-    <input type="button" id="timer_switch" value="timer switch on"/><br/> 
+    <input type="button" id="timer_switch" value="timer switch off"/><br/> 
     <input type="button" id="ble_read_test" value="ble read test"/><br/>
     <input type="button" id="ble_write_test" value="ble write test"/><br/>
     <input type="button" id="update_pos" value="update pos"/><br/>

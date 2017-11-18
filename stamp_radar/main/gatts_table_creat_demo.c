@@ -1257,10 +1257,20 @@ void init_encoder(){
 //dist2 画面上での距離(log計算の後)
 //angle3 画面上での角度(画面Y軸が基準で、時計回り)
 void calcUIPos2(float pre_x, float pre_y, float angle, float scale, float * pos_x, float * pos_y, float *angle3, float *dist2){
+    //近すぎる場合には、計算処理を行わない。
+    if(abs(pre_x) <1 && abs(pre_y) < 1){
+        *angle3 = 0;
+        *dist2 = 0;
+        *pos_x = (dispWin.x2-dispWin.x1)/2.0;
+        *pos_y = (dispWin.y2-dispWin.y1)/2.0;
+        return;
+    }
+
     float angle2;
     //まずは、中心からの距離と角度を算出する。
     float dist = sqrt(pre_x*pre_x+pre_y*pre_y);
     float angle1 = atan2(pre_y, pre_x)*180.0/PI;
+
     //DPRINT("%f %f %f %f\n",atan2(1, 1),atan2(1, -1),atan2(-1, -1),atan2(-1, 1));
     angle2 = angle1+angle; //方位磁針の角度を反映する
     angle2 = fmod(angle2, 360.0);
@@ -1331,11 +1341,11 @@ void drawObject(t_objInfo *obj, t_objInfo *obj_o){
      float preposx, preposy;
      calcPlaneDistance(obj->prePosLati-obj_o->prePosLati, obj->prePosLong-obj_o->prePosLong, alt, &x, &y, &z);
      calcUIPos(x, y, gPreAngle, gPreScale, &preposx, &preposy);
-     //printf("drawObject x=%f y=%f\n",x, y);
 
      calcPlaneDistance(obj->posLati-obj_o->posLati, obj->posLong-obj_o->posLong, alt, &x, &y, &z);
      DPRINT("draw Object x=%f y=%f, z=%f\n", x, y, z);
      calcUIPos(x, y, gAngle, gScale, &posx1, &posy1);
+     printf("drawObject id=%d x=%f y=%f posx=%f posy=%f\n",obj->id, x, y, posx1, posy1);
 /*
      int backAngle= 360 - gAngle;
      int pre_font_rotate = font_rotate;
@@ -1707,14 +1717,14 @@ void updateCompasAndScale(){
     static int rawX, rawY;
 
     mpu9250_mag_update(&mpu9250_data);
-    printf("originValues:%03d %03d %03d  magValues: %03d %03d %03d\n",
+    /*printf("originValues:%03d %03d %03d  magValues: %03d %03d %03d\n",
     mpu9250_mag_get(&mpu9250_data, 1, 0),
     mpu9250_mag_get(&mpu9250_data, 3, 2),
     mpu9250_mag_get(&mpu9250_data, 5, 4),
     mpu9250_mag_x(&mpu9250_data),
     mpu9250_mag_y(&mpu9250_data),
     mpu9250_mag_z(&mpu9250_data));
-
+*/
     medianBufferX[medianBufferIndexX] = mpu9250_mag_get(&mpu9250_data, 1, 0);
     medianBufferIndexX = (medianBufferIndexX + 1)%MEDIAN_BUFFER_LEN;
     rawX = smoothByMedianFilter(medianBufferX);
@@ -1802,7 +1812,14 @@ void procExecStamp(){
                printf("%s getObjByTypeError %d %d\n",__func__, OBJ_TYPE_STAMP, gSelectedStamp);
                continue;
            }
-           notifyPutObject(obj);
+           t_objInfo putObj;
+           putObj.posLati = gMyObj.posLati;
+           putObj.posLong = gMyObj.posLong;
+           putObj.type = obj->type;
+           putObj.typeId = obj->typeId;
+           putObj.owner = gMyObj.id;
+
+           notifyPutObject(&putObj);
            TFT_fillScreen(TFT_BLACK);
            _fg = TFT_WHITE;
            _bg = TFT_BLACK;
@@ -1826,6 +1843,8 @@ void procRadar(){
     //スタンプの押し付け
     struct timeval startPushTime, curTime, dTime;
     bool enableStanpExec = false; //スタンプが実行できるフラグ
+    time_t updateGATTTime=0, preUpdateGATTTime=0;
+
     while (1) {
         //check ES Status. Menuから戻った際に、GPIO ESが0のままの場合があるため、一旦、GPIOに変更にあったあとに、return処理を受け付ける。
         int esVal = gpio_get_level( GPIO_INPUT_IO_ES);
@@ -1859,7 +1878,7 @@ void procRadar(){
             printf("dTime=%ld\n", dTime.tv_sec);
         }
         //押され続けた場合
-        if(bsVal==0 && dTime.tv_sec>0 && enableStanpExec){
+        if(bsVal==0 && dTime.tv_usec>500000 && enableStanpExec){
             printf("printf exec stamp!!\n");
             //gMode = MODE_EXEC_STAMP;
             procExecStamp();
@@ -1873,6 +1892,30 @@ void procRadar(){
         }
         updateCompasAndScale();
         drawDisplay();
+
+        //GATTへ自分の情報の更新
+#if 1
+        time(&updateGATTTime);
+        //printf("%d %d\n", (int)updateGATTTime, (int)preUpdateGATTTime);
+        if(updateGATTTime - preUpdateGATTTime > 2){
+            //update myObj to share angle with browser
+            char tmpBuf[11];
+            char *bufP = tmpBuf;
+            memcpy(bufP, (char*)(&gMyObj.id),1);
+            memcpy(bufP+1, (float*)(&gMyObj.posLati),4);
+            memcpy(bufP+5, (float*)(&gMyObj.posLong),4);
+            memcpy(bufP+9, (short*)(&gMyObj.angle),2);
+            esp_ble_gatts_set_attr_value(HANDLE_CUR_POS, sizeof(tmpBuf),(uint8_t *)tmpBuf);
+            printf("updage GATT\n");
+            printObjList(&gObjList);
+
+            preUpdateGATTTime = updateGATTTime;
+
+        //notifyPutObject();
+        //gGetObj.id = 1;
+        //notifyGetObject();
+        }
+#endif
         //一度、以前の座標での描画クリアが行われたら、
         /*if(gMyObj.prePosEraseFg==true){
             gMyObj.prePosEraseFg=false;
@@ -1975,7 +2018,6 @@ void procMainMenu(){
                     gMode = MODE_SETUP;
                 }else if(selectIndex==3){
                     gMode = MODE_RADAR;
-
                 }
                 return;
             }
@@ -2242,6 +2284,50 @@ void procStampLib(){
    }
 }
 
+void showSetup(){
+    TFT_fillScreen(TFT_BLACK);
+    _fg = TFT_WHITE;
+    _bg = TFT_BLACK;
+    TFT_setFont(DEFAULT_FONT, NULL);
+    t_cell *tmp=&gObjList;
+    char buf[64];
+    int cnt=1;
+    while (tmp->next != NULL) {
+          tmp = tmp->next;
+          sprintf(buf, "i%dt%dtd%dla%.5flo%.5f",tmp->node.id,tmp->node.type,tmp->node.typeId, tmp->node.posLati, tmp->node.posLong);
+          if(cnt==1){
+              TFT_print(buf, 0, 30);
+          }else{
+              TFT_print(buf, 0, LASTY+TFT_getfontheight());
+          }
+          cnt++;
+    }
+}
+
+void procSetup(){
+    //Encoder Switchが押されたら戻る。
+    TFT_fillScreen(TFT_BLACK);
+    showSetup();
+    printf("proc Setup\n");
+    int val=gpio_get_level(GPIO_INPUT_IO_ES);
+    int preval =  val;
+    //まだ、押されている状況の時には、上がった時に反応しないようにする。
+    while(1){
+        if((val=gpio_get_level(GPIO_INPUT_IO_ES))!=preval){
+            printf("val=%d preval=%d\n",val, preval);
+
+            preval = val;
+            if(val==0){
+                TFT_fillScreen(TFT_BLACK);
+                return;
+            }
+        }
+        TFT_fillScreen(TFT_BLACK);
+        showSetup();
+        vTaskDelay(200 / portTICK_RATE_MS);
+    }
+}
+
 
 void readSetup(){
     FILE *fp;
@@ -2479,12 +2565,16 @@ void app_main()
             gLEDMode = LED_MODE_FADEINOUT_GREEN;
             procMainMenu();
         }else if(gMode==MODE_STAMP_SHEET){
-            gLEDMode = LED_MODE_FADEINOUT_GREEN;
+            gLEDMode = LED_MODE_FADEINOUT_RED;
             procStampSheet();
             gMode = MODE_RADAR;
         }else if(gMode==MODE_STAMP_LIB){
-            gLEDMode = LED_MODE_FADEINOUT_GREEN;
+            gLEDMode = LED_MODE_FADEINOUT_BLUE;
             procStampLib();
+            gMode = MODE_RADAR;
+        }else if(gMode==MODE_SETUP){
+            gLEDMode = LED_MODE_FADEINOUT_YELLOW;
+            procSetup();
             gMode = MODE_RADAR;
         }
 

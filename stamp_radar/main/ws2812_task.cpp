@@ -318,7 +318,18 @@ void ws2812_task(void *pvParameters) {
             pixel.blue=255;
 
             fadeInOutColor(WS2812_PIXEL_COUNT,pixel,delayms);
+        }else if(gLEDMode==LED_MODE_FADEINOUT_YELLOW){
+            if(gLEDMode!=preLEDMode){
+                printf("LED Mode switch Fadeinout yellow\n");
+                preLEDMode=gLEDMode;
+            }
+            pixel.red=255;
+            pixel.green=255;
+            pixel.blue=0;
+
+            fadeInOutColor(WS2812_PIXEL_COUNT,pixel,delayms);
         }
+
 	}
 
 	#if 0

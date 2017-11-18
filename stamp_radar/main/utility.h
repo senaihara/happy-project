@@ -19,6 +19,7 @@ typedef struct {
     float prePosLati;
     float prePosLong;
     bool prePosEraseFg;   //true:prePosによる以前の情報クリアが有効
+    int preScale; //前回の画像表示時のscale
 } t_objInfo;
 
 typedef struct t_cell
@@ -46,7 +47,7 @@ void calcPlaneDistance(float lat, float lon, float alt, float *x, float *y, floa
 
 void TFT_jpg_image2(int x, int y, int prex, int prey, uint8_t scale, char *fname, uint8_t *buf, int size);
 void TFT_jpg_image_get_handle(JPGIODEV *dev, JDEC *jd, char *fname);
-void TFT_jpg_image_with_handle(int x, int y, int prex, int scale, int prey, JPGIODEV *dev, JDEC *jd);
+void TFT_jpg_image_with_handle(int x, int y, int prex, int scale, int prescale, int prey, JPGIODEV *dev, JDEC *jd);
 
 //#define DEBUG_PRINT
 #ifdef DEBUG_PRINT

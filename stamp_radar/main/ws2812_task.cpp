@@ -263,7 +263,7 @@ void ws2812_task(void *pvParameters) {
 	        cur_pixel.blue = 0;
 	        setColor(WS2812_PIXEL_COUNT,cur_pixel);
 	        //oWS2812->clear();
-	        vTaskDelay(200 / portTICK_RATE_MS);
+	        vTaskDelay(100 / portTICK_RATE_MS);
 	    }else if(gLEDMode==LED_MODE_RANDOM){
 	        if(gLEDMode!=preLEDMode){
 	            printf("LED Mode switch RANDOM\n");
@@ -328,7 +328,19 @@ void ws2812_task(void *pvParameters) {
             pixel.blue=0;
 
             fadeInOutColor(WS2812_PIXEL_COUNT,pixel,delayms);
+        }else if(gLEDMode==LED_MODE_FLASH){
+            if(gLEDMode!=preLEDMode){
+                printf("LED Mode switch Fadeinout yellow\n");
+                preLEDMode=gLEDMode;
+            }
+            pixel.red=255;
+            pixel.green=255;
+            pixel.blue=255;
+
+            fadeInOutColor(WS2812_PIXEL_COUNT,pixel,2);
+            gLEDMode = LED_MODE_NONE;
         }
+
 
 	}
 

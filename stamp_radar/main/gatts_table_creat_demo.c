@@ -376,14 +376,16 @@ t_cell gObjList;
 t_cell gHoldingObjList;
 int gHoldingObjIdList[32];
 int gPreGPIOES=0;
-
 int gSelectedStamp=0;
+bool gDispHeaderFg = true;
 
 #define MAX_STAMP_NUM 20
 
 //ObjectType一覧
 #define OBJ_TYPE_WALKER 1
 #define OBJ_TYPE_STAMP 2
+
+#define GET_STAMP_ENABLE_LENGTH 30  //スタンプをGetする際の自分からの範囲
 
 //リアルタイムに表示する画像
 JPGIODEV gKuroDev;
@@ -474,7 +476,12 @@ static void gatts_profile_event_handler(esp_gatts_cb_event_t event,
             printf("updated myObj gLati=%f gLong=%f\n", gMyObj.posLati, gMyObj.posLong);
             DPRINT("curpos lat=%x %x %x %x\n", *(p+1), *(p+2), *(p+3), *(p+4));
             DPRINT("updated myObj gLati=%f gLong=%f\n", gMyObj.posLati, gMyObj.posLong);
-        }
+
+            //LEDを光らせましょう
+            if(gLEDMode == LED_MODE_NONE){
+                gLEDMode = LED_MODE_FLASH;
+            }
+    	    }
 
     	    //Get Map Objj
     	    if(param->write.handle==HANDLE_MAP_OBJ){
@@ -511,10 +518,19 @@ static void gatts_profile_event_handler(esp_gatts_cb_event_t event,
         if(param->write.handle==HANDLE_HOLDING_OBJS){
             esp_ble_gatts_get_attr_value(HANDLE_HOLDING_OBJS,  &length, &p);
             unsigned char latBuf[4], longBuf[4];
+            int id=0;
             //以前の情報のバックアップ
             for(int i=0; i<length; i++){
-                printf("update holding objs id=%d\n", *p);
-                gHoldingObjIdList[i]=*p;
+                id = (int)(*p);
+                printf("update holding objs id=%d\n", id);
+                //gHoldingObjIdList[i]=*p;
+                //該当するobjIdに存在する場合に、そのobjをgHoldingObjListに反映する。
+                t_objInfo *tmpObj=getObj(&gObjList, id);
+                if(tmpObj==NULL){
+                    printf("update holding objs id=%d is not exist\n", *p);
+                }else{
+                    updateObjList(&gHoldingObjList, *tmpObj);
+                }
                 p++;
             }
         }
@@ -1346,6 +1362,13 @@ void drawObject(t_objInfo *obj, t_objInfo *obj_o){
      DPRINT("draw Object x=%f y=%f, z=%f\n", x, y, z);
      calcUIPos(x, y, gAngle, gScale, &posx1, &posy1);
      printf("drawObject id=%d x=%f y=%f posx=%f posy=%f\n",obj->id, x, y, posx1, posy1);
+
+     int scale=1;
+     //近くの場合にはscaleを0にする。
+     if(sqrt(x*x+y*y)<GET_STAMP_ENABLE_LENGTH && obj->owner!=gMyObj.id){
+         scale = 0;
+     }
+
 /*
      int backAngle= 360 - gAngle;
      int pre_font_rotate = font_rotate;
@@ -1360,11 +1383,13 @@ void drawObject(t_objInfo *obj, t_objInfo *obj_o){
 
      //Stampの表示
      if(obj->type==OBJ_TYPE_STAMP){
+
+
          if(obj->owner != (char)gMyObj.id){
              //printf("object ownder=%d gMyObj.id=%d kuro\n",obj->owner,gMyObj.id);
-             TFT_jpg_image_with_handle(posx1, posy1, preposx, preposy, 0, &gKuroDev, &gKuroJd);
+             TFT_jpg_image_with_handle(posx1, posy1, preposx, preposy, scale, obj->preScale, &gKuroDev, &gKuroJd);
          } else {//自分の時はグレー表示
-             TFT_jpg_image_with_handle(posx1, posy1, preposx, preposy, 0, &gKuroGDev, &gKuroGJd);
+             TFT_jpg_image_with_handle(posx1, posy1, preposx, preposy, scale, obj->preScale, &gKuroGDev, &gKuroGJd);
              //printf("object ownder=%d gMyObj.id=%d kuroG\n",obj->owner,gMyObj.id);
          }
      }
@@ -1379,16 +1404,19 @@ void drawObject(t_objInfo *obj, t_objInfo *obj_o){
          //printf("angle=%d\n",angle);
 
          if(0<=angle && angle<45)
-             TFT_jpg_image_with_handle(posx1, posy1, preposx, preposy, 1, &gWalkerUpDev, &gWalkerUpJd);
+             TFT_jpg_image_with_handle(posx1, posy1, preposx, preposy, 1, 1, &gWalkerUpDev, &gWalkerUpJd);
          if(45<=angle && angle<135)
-             TFT_jpg_image_with_handle(posx1, posy1, preposx, preposy, 1, &gWalkerRightDev, &gWalkerRightJd);
+             TFT_jpg_image_with_handle(posx1, posy1, preposx, preposy, 1, 1, &gWalkerRightDev, &gWalkerRightJd);
          if(135<=angle && angle<225)
-             TFT_jpg_image_with_handle(posx1, posy1, preposx, preposy, 1, &gWalkerDownDev, &gWalkerDownJd);
+             TFT_jpg_image_with_handle(posx1, posy1, preposx, preposy, 1, 1, &gWalkerDownDev, &gWalkerDownJd);
          if(225<=angle && angle<315)
-             TFT_jpg_image_with_handle(posx1, posy1, preposx, preposy, 1, &gWalkerLeftDev, &gWalkerLeftJd);
+             TFT_jpg_image_with_handle(posx1, posy1, preposx, preposy, 1, 1, &gWalkerLeftDev, &gWalkerLeftJd);
          if(315<=angle && angle<=360)
-              TFT_jpg_image_with_handle(posx1, posy1, preposx, preposy, 1, &gWalkerUpDev, &gWalkerUpJd);
+              TFT_jpg_image_with_handle(posx1, posy1, preposx, preposy, 1, 1, &gWalkerUpDev, &gWalkerUpJd);
      }
+
+     //後処理
+     obj->preScale = scale;
 
      // TFT_drawCircle(posx1, posy1, 10, gBaseColor1);
 
@@ -1496,12 +1524,10 @@ void drawDisplay(){
     float posx1, posy1, posx2, posy2;
     char buf[20];
     int cnt=0;
-    sprintf(buf, "%0.5f %0.5f %d", gMyObj.posLati, gMyObj.posLong, gMyObj.angle);
-    //sprintf(buf, "auau");
-    //printf("%0.5f %0.5f %3d\n", gMyObj.posLati, gMyObj.posLong, gMyObj.angle);
 
-    //sprintf(buf, "%0.5f %0.5f %f", gMyObj.posLati, gMyObj.posLong, gAngle);
-    disp_header(buf);
+    sprintf(buf, "%0.5f %0.5f %d", gMyObj.posLati, gMyObj.posLong, gMyObj.angle);
+    if(gDispHeaderFg)
+        disp_header(buf);
 
     //update time
     gPreTime.tv_sec = gTime.tv_sec;
@@ -1514,7 +1540,8 @@ void drawDisplay(){
     float samplingTime = diffTime.tv_sec*1000.0 + diffTime.tv_usec/1000.0;
 
     sprintf(buf, "%4.1f", samplingTime);
-    disp_footer(buf);
+    if(gDispHeaderFg)
+        disp_footer(buf);
 
 
     int backAngle= 360 - gAngle;
@@ -1939,7 +1966,7 @@ void procRadar(){
     }
 }
 
-void showMainMenu(int itemNum, int labelLen, char itemName[itemNum][labelLen],int selectIndex){
+void showMenu(int itemNum, int labelLen, char itemName[itemNum][labelLen],int selectIndex){
     int width, height, x, y;
     width = (dispWin.x2 - dispWin.x1);
     height = (dispWin.y2 - dispWin.y1);
@@ -2002,7 +2029,7 @@ void procMainMenu(){
     char label[4][16] = {"Stamp\nSheet", "Stamp\nlib.", "Setup", "Back"};
     int preEnCnt=gEnCnt;
     int selectIndex=0;
-    showMainMenu(itemNum, labelLen, label, selectIndex);
+    showMenu(itemNum, labelLen, label, selectIndex);
     int val=0;
     while(1){
         if((val=gpio_get_level(GPIO_INPUT_IO_ES))!=gPreGPIOES){
@@ -2035,7 +2062,7 @@ void procMainMenu(){
                     selectIndex=itemNum-1;
                 }
             }
-            showMainMenu(itemNum, labelLen, label, selectIndex);
+            showMenu(itemNum, labelLen, label, selectIndex);
             preEnCnt=gEnCnt;
         }
         vTaskDelay(200 / portTICK_RATE_MS);
@@ -2046,7 +2073,7 @@ void procMainMenu(){
 int getNearStampId(){
     t_cell *tmp=&gObjList;
     float x,y,z,alt=0;
-    float dist,threthDist=150;
+    float dist,threthDist=GET_STAMP_ENABLE_LENGTH;
     float minDist=9999;
     int minId=0,minTypeId=0;
     while (tmp->next != NULL) {
@@ -2284,26 +2311,143 @@ void procStampLib(){
    }
 }
 
-void showSetup(){
+void showObjs(){
     TFT_fillScreen(TFT_BLACK);
     _fg = TFT_WHITE;
     _bg = TFT_BLACK;
     TFT_setFont(DEFAULT_FONT, NULL);
     t_cell *tmp=&gObjList;
     char buf[64];
-    int cnt=1;
+    sprintf(buf, "myi%dt%dtd%dla%.5flo%.5f",gMyObj.id, gMyObj.type,gMyObj.typeId, gMyObj.posLati, gMyObj.posLong);
+    TFT_print(buf, 0, 30);
+
     while (tmp->next != NULL) {
           tmp = tmp->next;
-          sprintf(buf, "i%dt%dtd%dla%.5flo%.5f",tmp->node.id,tmp->node.type,tmp->node.typeId, tmp->node.posLati, tmp->node.posLong);
-          if(cnt==1){
-              TFT_print(buf, 0, 30);
-          }else{
-              TFT_print(buf, 0, LASTY+TFT_getfontheight());
-          }
-          cnt++;
+          sprintf(buf, "id=%d type=%d tId=%d angle=%d\nla=%.5f lo=%.5f",tmp->node.id,tmp->node.type,tmp->node.typeId, tmp->node.angle, tmp->node.posLati, tmp->node.posLong);
+          TFT_print(buf, 0, LASTY+TFT_getfontheight());
     }
 }
 
+//Setupの処理
+void procSetup(){
+    gEnCnt=0;
+    TFT_fillScreen(TFT_BLACK);
+
+    static const int itemNum=3;
+    static const int labelLen=16;
+    char label[4][16] = {"Objlist", "DispSet", "Adjust\nCompas"};
+    int val=gpio_get_level(GPIO_INPUT_IO_ES);
+    int preval =  val;
+    int preEnCnt=gEnCnt;
+    int selectIndex=0;
+    showMenu(itemNum, labelLen, label, selectIndex);
+    while(1){
+        if((val=gpio_get_level(GPIO_INPUT_IO_ES))!=preval){
+            preval = val;
+            if(val==0){
+                printf("GPIO go to low. index=%d\n",selectIndex);
+                //ObjListの表示
+                if(selectIndex==0){
+                    int val=gpio_get_level(GPIO_INPUT_IO_ES);
+                    preval = val;
+                    while(1){
+                        if((val=gpio_get_level(GPIO_INPUT_IO_ES))!=preval){
+                            preval=val;
+                            if(val==0){
+                                return;
+                            }
+                        }
+                        showObjs();
+                        vTaskDelay(500 / portTICK_RATE_MS);
+                    }
+                }
+                //switch disp header
+                else if(selectIndex==1){
+                    char buf[16];
+                    if(gDispHeaderFg){
+                        sprintf(buf, "DispHeader Off");
+                    }else{
+                        sprintf(buf, "DispHeader On");
+                    }
+                    _fg = TFT_WHITE;
+                    _bg = TFT_BLACK;
+                    TFT_setFont(DEJAVU18_FONT, NULL);
+                    TFT_fillScreen(TFT_BLACK);
+                    TFT_print(buf, CENTER, CENTER);
+                     vTaskDelay(2000 / portTICK_RATE_MS);
+                    gDispHeaderFg=!gDispHeaderFg;
+                    TFT_fillScreen(TFT_BLACK);
+                    return;
+                //Adjust compas
+                }else if(selectIndex==2){
+                    int val=gpio_get_level(GPIO_INPUT_IO_ES);
+                    preval = val;
+                    int max_x = -9999;
+                    int min_x= 9999;
+                    int max_y = -9999;
+                    int min_y= 9999;
+
+                    while(1){
+                        if((val=gpio_get_level(GPIO_INPUT_IO_ES))!=preval){
+                            preval=val;
+                            if(val==0){
+                                gCompas_X_Max = max_x;
+                                gCompas_X_Min = min_x;
+                                gCompas_Y_Max = max_y;
+                                gCompas_Y_Min = min_y;
+
+                                return;
+                            }
+                        }
+                        _fg = TFT_WHITE;
+                        _bg = TFT_BLACK;
+                        TFT_setFont(DEFAULT_FONT, NULL);
+                        TFT_fillScreen(TFT_BLACK);
+                        mpu9250_mag_update(&mpu9250_data);
+                        int originx = mpu9250_mag_get(&mpu9250_data, 1, 0);
+                        int originy =mpu9250_mag_get(&mpu9250_data, 3, 2);
+                        if(max_x < originx)
+                            max_x = originx;
+                        if(min_x > originx)
+                            min_x = originx;
+                        if(max_y < originy)
+                            max_y = originy;
+                        if(min_y > originy)
+                            min_y = originy;
+                        char buf[256];
+                        sprintf(buf, "origin x=%d origin y=%d",originx,originy);
+                        TFT_print(buf, CENTER, CENTER);
+                        sprintf(buf, "max x=%d min x =%d",max_x,min_x);
+                        TFT_print(buf, CENTER, LASTY+TFT_getfontheight());
+                        sprintf(buf, "max y=%d min y =%d",max_y,min_y);
+                        TFT_print(buf, CENTER, LASTY+TFT_getfontheight());
+
+                        vTaskDelay(500 / portTICK_RATE_MS);
+                    }
+                }
+                return;
+            }
+        }
+
+        if(gEnCnt!=preEnCnt){
+            if(gEnCnt>preEnCnt){
+                selectIndex++;
+                if(selectIndex>=itemNum){
+                    selectIndex=0;
+                }
+            }else{
+                selectIndex--;
+                if(selectIndex<0){
+                    selectIndex=itemNum-1;
+                }
+            }
+            showMenu(itemNum, labelLen, label, selectIndex);
+            preEnCnt=gEnCnt;
+        }
+        vTaskDelay(200 / portTICK_RATE_MS);
+    }
+}
+#if 0
 void procSetup(){
     //Encoder Switchが押されたら戻る。
     TFT_fillScreen(TFT_BLACK);
@@ -2327,6 +2471,7 @@ void procSetup(){
         vTaskDelay(200 / portTICK_RATE_MS);
     }
 }
+#endif
 
 
 void readSetup(){

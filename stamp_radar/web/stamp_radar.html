@@ -65,6 +65,8 @@
     var gWriteCupPosQueue = new Array(); //GATT書き込みキュー(CurPos)
     var gReadCurAngleQueue = new Array(); //GATT読み込みキュー(CurAngle)
     var gWriteMapObjQueue = new Array(); //GATT書き込みキュー(Obj)
+    var gWriteHoldingObjQueue = new Array(); //GATT書き込みキュー(HoldingObj)
+    
      
     function initMap() {             // google maps Javascript と同期
         if (navigator.geolocation) {   // 現在の位置情報を取得する
@@ -161,15 +163,21 @@
             if(gTimerSwitch){
                 if(gGattModeFg%3==0){
                     updateCurPosToAll();
-                }else if(gGattModeFg%3==1){
+                }
+                if(gGattModeFg%3==1){
                     getRadarAngleFromRadar();
-                }else if(gGattModeFg%3==2){
+                    updateCurPosToAll();
+                }if(gGattModeFg%3==2){
                     updateObjs();
+                }
+                //HoldObjの更新は、時々行う
+                if(gGattModeFg%50==4){
+                    updateHoldingObjs();
                 }
                 updateInfo();
                 gGattModeFg+=1;
             }
-        },2000);
+        },1000);
         
         $('#ble_connect').click(function(){
            //alert('connect')
@@ -205,6 +213,10 @@
                 service.getCharacteristic(CHARA_UUID_CUR_POS).then(characteristic => {
                     gCharaCurPos = characteristic;    
                     log('> Characteristic UUID:  ' + characteristic.uuid);
+                    
+                    //接続が終了したら、タイマーを開始する。
+                    gTimerSwitch  = true;
+                    updateInfo(); 
                 
                 });
                 
@@ -292,33 +304,9 @@
                
                service.getCharacteristic(CHARA_UUID_HOLDING_OBJS).then(characteristic => {
                     gCharaHoldingObjs = characteristic;
-                    log('>holding objs Characteristic UUID:  ' + characteristic.uuid);
+                    log('>holding objs Characteristic UUID:  ' + characteristic.uuid); 
                 });
-
             })
-            /*
-           .then(characteristic => {
-                log('> Characteristic UUID:  ' + characteristic.uuid);
-                log('> Broadcast:            ' + characteristic.properties.broadcast);
-                log('> Read:                 ' + characteristic.properties.read);
-                log('> Write w/o response:   ' +
-                      characteristic.properties.writeWithoutResponse);
-                log('> Write:                ' + characteristic.properties.write);
-                log('> Notify:               ' + characteristic.properties.notify);
-                log('> Indicate:             ' + characteristic.properties.indicate);
-                log('> Signed Write:         ' +
-                      characteristic.properties.authenticatedSignedWrites);
-                log('> Queued Write:         ' + characteristic.properties.reliableWrite);
-                log('> Writable Auxiliaries: ' +
-                      characteristic.properties.writableAuxiliaries);
-  
-                gCharaCurPos = characteristic;
-                //return gCharaCurPos.startNotifications().then(_ => {
-                //    log('> Notifications started');
-                //    gCharacteristic.addEventListener('characteristicvaluechanged',
-                //    handleNotifications);
-                //});
-            })*/
         })
   
         $('#ble_read_test').click(function(){
@@ -488,33 +476,22 @@
         sendBuf[6] = arrayLong[1];
         sendBuf[7] = arrayLong[2];
         sendBuf[8] = arrayLong[3];
-        /*
-        gCharaCurPos.writeValue(sendBuf)
-        .catch(error => {
-            retryCount--;
-            log("retryCount"+retryCount)
-            if (retryCount > 0) {
-                return updateCurPos2Radar(retryCount);
-            }
-            log("write error");
-            return Promise.reject(error);
-        });
-        */
+        
         gWriteCupPosQueue.push(sendBuf);
         
         var loopFunc = function (){
             if(gWriteCupPosQueue.length <=0 )
                 return;
             
-            log("write array"+gWriteCupPosQueue[0]);
+            //log("write array"+gWriteCupPosQueue[0]);
                 
             gCharaCurPos.writeValue(gWriteCupPosQueue[0])
             .catch(error => {
-                log("write error. "+gWriteMapObjQueue[0]);
+                log("write Cur Pos error. "+gWriteCupPosQueue[0]);
                 return;
             })
             .then(_ => {
-                log("write ok. exec shift="+gWriteCupPosQueue[0]);
+                //log("write ok. exec shift="+gWriteCupPosQueue[0]);
                 gWriteCupPosQueue.shift();
              })
             
@@ -562,7 +539,7 @@
                 gReadCurAngleQueue.shift();
             })      
             .catch(error => {
-                log("read anble error. "+gReadCurAngleQueue[0]);
+                log("read Angle error. "+gReadCurAngleQueue[0]);
                 return;
             })
             setTimeout(loopFunc, 200);
@@ -585,12 +562,9 @@
         .done(function(data) {
             var len = data.length;
             for(var i = 0; i < len; i++) {
-                log("update_cur_pos.php resul="+data[i].result);
+                //log("update_cur_pos.php resul="+data[i].result);
             }
         });  
-        
-        //画面情報の更新
-        //updateInfo();
     }
     
     //Radarへのオブジェクトの更新
@@ -631,38 +605,25 @@
         sendBuf[14] = walkerObj.statusFg;//status
         sendBuf[15] = walkerObj.enableFg;//enableFg
         sendBuf[16] = walkerObj.viewFg;//viewFg
-        
-            /*
-            //log("update obj sendBuf "+sendBuf);
-            return gCharaMapObj.writeValue(sendBuf)
-           .catch(error => {
-                retryCount--;
-                log("retryCount"+retryCount)
-                if (retryCount > 0) {
-                    return updateObjs2RadarAll(retryCount);
-                }
-                log("write error");
-                return Promise.reject(error);
-            });*/
-        
+            
             gWriteMapObjQueue.push(sendBuf);  
         }
         
         var loopFunc = function (){
             if (gWriteMapObjQueue.length <=0) {
-                log("exec all ok");
+                //log("exec all ok");
                 return;
             }
             
-            log("write array"+gWriteMapObjQueue[0]);
+            //log("write array"+gWriteMapObjQueue[0]);
                 
             gCharaMapObj.writeValue(gWriteMapObjQueue[0])
             .catch(error => {
-                log("write error. "+gWriteMapObjQueue[0]);
+                log("write Map Obj error. "+gWriteMapObjQueue[0]);
                 return;
             })
             .then(_ => {
-                log("write ok. exec shift="+gWriteMapObjQueue[0]);
+                //log("write ok. exec shift="+gWriteMapObjQueue[0]);
                 gWriteMapObjQueue.shift();
                 //status[i] = 1;
                 //log("write ok i="+i+"status="+status[i]+" walkerid="+walkerObj.id+" result="+_);
@@ -672,76 +633,6 @@
             setTimeout(loopFunc, 200);
         }
         loopFunc();   
-    }
-
-     //Radarへのオブジェクトの更新 まとめて送信
-    function updateObjs2RadarAll(){
-        var sendNum=2;
-        var sendBuf = new Int8Array(17*sendNum+1);
-        //最初のバッファーには、数を入れる
-        sendBuf[i*17+0]=gObjList.length;
-        for(var i=0; i< sendNum || i<gObjList.length; i++){
-            walkerObj = gObjList[i];
-        
-            var f1 = new Float32Array(1);
-            f1[0] = walkerObj.posLat;
-            var arrayLati = new Int8Array(f1.buffer)
-          
-            var f2 = new Float32Array(1);
-            f2[0] = walkerObj.posLong;
-            var arrayLong = new Int8Array(f2.buffer);
-            
-            var d1 = new Int16Array(1);
-            d1[0] = walkerObj.angle;
-            var arrayAngle = new Int8Array(d1.buffer);
-            
-            //id[1],lat[4],long[4],angle[2],type[1],owner[1],status[1],enableFg[1],viewFg[1]
-                     
-            sendBuf[i*17+1+0] = walkerObj.id;
-            sendBuf[i*17+1+1] = arrayLati[0];
-            sendBuf[i*17+1+2] = arrayLati[1];
-            sendBuf[i*17+1+3] = arrayLati[2];
-            sendBuf[i*17+1+4] = arrayLati[3];
-            sendBuf[i*17+1+5] = arrayLong[0];
-            sendBuf[i*17+1+6] = arrayLong[1];
-            sendBuf[i*17+1+7] = arrayLong[2];
-            sendBuf[i*17+1+8] = arrayLong[3];
-            sendBuf[i*17+1+9] = arrayAngle[0];
-            sendBuf[i*17+1+10] = arrayAngle[1];
-            sendBuf[i*17+1+11] = walkerObj.type;//type
-            sendBuf[i*17+1+12] = walkerObj.typeId;//type id
-            sendBuf[i*17+1+13] = walkerObj.owner;//owner
-            sendBuf[i*17+1+14] = walkerObj.statusFg;//status
-            sendBuf[i*17+1+15] = walkerObj.enableFg;//enableFg
-            sendBuf[i*17+1+16] = walkerObj.viewFg;//viewFg
-        }
-        
-        //var status = false;
-        var status = new Int8Array(1);
-        status[0] = false;
-        loopSleep(10, 200, status, function(i){
-            log("write obj="+walkerObj.id);
-            gCharaMapObj.writeValue(sendBuf)
-            .catch(error => {
-                return;
-            })
-            .then(function(result) {
-                status[0] = true;
-             })
-        });
-         
-        /*
-        //log("update obj sendBuf "+sendBuf);
-        return gCharaMapObj.writeValue(sendBuf)
-       .catch(error => {
-            retryCount--;
-            log("retryCount"+retryCount)
-            if (retryCount > 0) {
-                return updateObjs2Radar(walkerObj, retryCount);
-            }
-            log("write error");
-            return Promise.reject(error);
-        });*/
     }
     
     //オブジェクトの更新(DBからobjectを取得してRadarに更新する)
@@ -753,11 +644,11 @@
         .done(function(data) {
             //alert('getdata')
             var len = data.length;
-            log("search_obj.php len="+len);
+            //log("search_obj.php len="+len);
             for(var i = 0; i < len; i++) {
-                tmpObj = new WalkerObj(data[i].id, data[i].pos_lat, data[i].pos_long, data[i].pos_alt, data[i].angle, data[i].type, data[i].type_id, data[i].owner, data[i].status_fg, data[i].enable_fg, data[i].delete_fg);
-               //log("updateObj i="+i+" objId="+data[i].id+" type="+data[i].type+" typeId="+data[i].type_id);
-               //log("updateObj2 i="+i+" objId="+tmpObj.id+" type="+tmpObj.type+" typeId="+tmpObj.typeId);
+                tmpObj = new WalkerObj(data[i].id, data[i].pos_lat, data[i].pos_long, data[i].pos_alt, data[i].pos_angle, data[i].type, data[i].type_id, data[i].owner, data[i].status_fg, data[i].enable_fg, data[i].delete_fg);
+               //log("updateObj i="+i+" objId="+data[i].id+" type="+data[i].type+" typeId="+data[i].type_id+" angle="+data[i].pos_angle);
+               //log("updateObj2 i="+i+" objId="+tmpObj.id+" type="+tmpObj.type+" typeId="+tmpObj.typeId+" angle="+tmpObj.angle);
                 
                 //check existance
                 var fg = 0;
@@ -766,7 +657,7 @@
                         fg = 1;
                         //update values
                         gObjList[j].copy(tmpObj);
-                        log("tmpobj log="+tmpObj.posLong);
+                        //log("tmpobj log="+tmpObj.posLong);
                         
                         break;
                     }
@@ -800,7 +691,7 @@
             var len = data.length;
             //alert("getdata");
             for(var i = 0; i < len; i++) {
-                log("get data="+data[i].result);
+                //log("get data="+data[i].result);
             }
         });
     }
@@ -814,13 +705,13 @@
             var len = data.length;
             //alert("getdata");
             for(var i = 0; i < len; i++) {
-                log("get obj to DB="+data[i].result);
+                //log("get obj to DB="+data[i].result);
             }
         });
     }
     
     //レーダーに対して、現在保持しているObj情報の更新を行う。
-    function updateHoldingObjsToRadar(holdingObjs,retryCount){
+    function updateHoldingObjsToRadar(holdingObjs){
         if(gDevice==null || gCharaHoldingObjs == null){
             log("gDevice or gCharaHodingObjs = null");
             return;
@@ -832,6 +723,29 @@
             sendBuf[i] = holdingObjs[i];
         }
         
+        gWriteHoldingObjQueue.push(sendBuf);
+        
+        var loopFunc = function (){
+            if(gWriteHoldingObjQueue.length <=0 )
+                return;
+            
+            //log("write array"+gWriteHoldingObjQueue[0]);
+                
+            gCharaHoldingObjs.writeValue(gWriteHoldingObjQueue[0])
+            .catch(error => {
+                log("write HoldingObj error. "+gWriteHoldingObjQueue[0]);
+                return;
+            })
+            .then(_ => {
+                //log("write ok. exec shift="+gWriteHoldingObjQueue[0]);
+                gWriteHoldingObjQueue.shift();
+             })
+            
+            setTimeout(loopFunc, 200);
+        }
+        loopFunc();   
+        
+       /* 
         return gCharaHoldingObjs.writeValue(sendBuf)
        .catch(error => {
             retryCount--;
@@ -841,7 +755,8 @@
             }
             log("write error");
             return Promise.reject(error);
-        });   
+        });
+        */   
     }
     
     //レーダーに対して、現在保持しているObj情報の更新を行う。
@@ -855,10 +770,10 @@
             var len = data.length;
             //alert("getdata");
             for(var i = 0; i < len; i++) {
-                log("get holding obj from DB="+data[i].id);
+                //log("get holding obj from DB="+data[i].id);
                 holdingObjs.push(data[i].id);
             }
-            updateHoldingObjsToRadar(holdingObjs, 50);
+            updateHoldingObjsToRadar(holdingObjs);
         });   
     }
 

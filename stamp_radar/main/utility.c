@@ -561,7 +561,7 @@ exit:
     if (dev->fhndl) fclose(dev->fhndl);  // close input file
 }
 
-void TFT_jpg_image_with_handle(int x, int y, int prex, int prey, int scale, JPGIODEV *dev, JDEC *jd)
+void TFT_jpg_image_with_handle(int x, int y, int prex, int prey, int scale, int prescale, JPGIODEV *dev, JDEC *jd)
 {
     JRESULT rc;
     char *work = NULL;      // Pointer to the working buffer (must be 4-byte aligned)
@@ -595,7 +595,7 @@ void TFT_jpg_image_with_handle(int x, int y, int prex, int prey, int scale, JPGI
         //TFT_fillRect(prex-jd->width/2, prey-jd->height/2, jd->width, jd->height, TFT_BLACK);
        //画面範囲以内の時に対応する
         if(dispWin.x1< prex && prex < dispWin.x2 && dispWin.y1< prey && prey < dispWin.y2){
-            TFT_fillRect(prex-jd->width/2, prey-jd->height/2, jd->width/(scale+1), jd->height/(scale+1), TFT_BLACK);
+            TFT_fillRect(prex-jd->width/2, prey-jd->height/2, jd->width/(prescale+1), jd->height/(prescale+1), TFT_BLACK);
         }
 
         //printf("width=%d height=%d scale=%d\n",jd.width,jd.height,scale);

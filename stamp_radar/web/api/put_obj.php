@@ -68,9 +68,52 @@ if (is_null($pos_lat) || is_null($pos_long) || is_null($pos_alt) || is_null($own
     throw new Exception("input error. put_obj.php pos_lat=$pos_lat pos_long=$pos_long pos_alt=$pos_alt owner=$owner type=$type");
 }
 
+//自分がownerであるオブジェクトがいくつあるか確認する。
+$sql = "select count(*) from objects where owner=$owner and id!=$owner";
+$dbh = connectDb();
+$stmt= $dbh->query($sql);
+while ($row = $stmt->fetch()) {
+    //needs to comment out if return json to browser
+    //print_r($row);
+    //error_log("result=$row[0]");
+    $ownObjNum=$row[0];
+    //error_log("owing object num=$ownObjNum");
+}
+
+//最大数よりも大きい場合には、生成日が古いものから削除フラグを立てる。
+$ownMaxNum=0;
+if($ownObjNum>$ownMaxNum){
+    //降順で並べて、新しい2個以外は削除対象にする。
+    $sql = "select id AS id from objects where owner=$owner and id!=$owner order by create_time DESC";
+    $stmt= $dbh->query($sql);
+    $deleteObj=array();
+    //削除対象をリストに入れる。
+    $cnt=0;;
+    while ($row = $stmt->fetch()) {
+        $cnt++;
+        if($cnt>$ownMaxNum){
+            $deleteObj[]=$row[0];
+        }
+    }
+    /*
+    for($i=0; $i<count($deleteObj); $i++){
+        error_log("delete obj i=$i obj=$deleteObj[$i]");
+    }*/
+    
+    //削除対象はdelete fgを立てる。
+    
+    $sql = "update objects set delete_fg = :delete_fg, update_time=now() where id = :id";
+    $stmt = $dbh->prepare($sql);
+    
+    foreach($deleteObj as $row){
+        //error_log("row = $row");
+        $stmt->execute(array(':delete_fg'=>1, ':id'=>$row));
+    }
+}
+
 //get new id
 $sql = "select MAX(id) from objects";
-$dbh = connectDb();
+//$dbh = connectDb();
 $stmt= $dbh->query($sql);
 
 while ($row = $stmt->fetch()) {

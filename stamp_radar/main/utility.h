@@ -42,6 +42,7 @@ int deleteObj2List(t_cell *bp, t_objInfo obj);
 void deleteAllObjList(t_cell *bp);
 void printObjList(t_cell *bp);
 bool checkTypeExist(t_cell *bp, int type, int typeId);
+//void copyObjInfo(t_objInfo *fromObj, t_objInfo *toObj);
 void objListTest();
 
 void calcPlaneDistance(float lat, float lon, float alt, float *x, float *y, float*z);

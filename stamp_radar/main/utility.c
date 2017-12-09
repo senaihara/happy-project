@@ -197,6 +197,26 @@ bool checkTypeExist(t_cell *bp, int type, int typeId){
     return false;
 }
 
+/*memcopyが使えたので不要
+void copyObjInfo(t_objInfo *fromObj, t_objInfo *toObj){
+    toObj->id = fromObj->id;
+    toObj->posLati = fromObj->posLati;
+    toObj->posLong = fromObj->posLong;
+    toObj->posAlt = fromObj->posAlt;
+    toObj->angle = fromObj->angle;
+    toObj->type = fromObj->type;
+    toObj->typeId = fromObj->typeId;
+    toObj->owner = fromObj->owner;
+    toObj->status = fromObj->status;
+    toObj->enableFg = fromObj->enableFg;
+    toObj->viewFg = fromObj->viewFg;
+    toObj->deleteFg = fromObj->deleteFg;
+    toObj->prePosLati = fromObj->prePosLati;
+    toObj->prePosLong = fromObj->prePosLong;
+    toObj->prePosEraseFg = fromObj->prePosEraseFg;
+    toObj->preScale = fromjObj->preScale;
+}*/
+
 void objListTest(){
     int cnt=0;
     t_cell gObjList;

@@ -1650,9 +1650,19 @@ void drawDisplay(){
     //drawObject
     t_cell *tmp=&gObjList;
     cnt = 0;
+    //オブジェクトリストの数を数える。
+    t_objInfo drawObjInfo;
     while (tmp->next != NULL) {
         tmp = tmp->next;
-        drawObject(&(tmp->node), &gMyObj);
+        //並行でオブジェクトリストの更新処理で、削除される場合があるため、オブジェクト情報をコピーして、drawObjectを行う。
+        memcpy(&drawObjInfo, &(tmp->node), sizeof(t_objInfo));
+        //copyObjInfo(&(tmp->node), &drawObjInfo);
+        //drawObject(&(tmp->node), &gMyObj);
+        drawObject(&drawObjInfo, &gMyObj);
+        //drawObjectの中で更新している値を書き戻す
+        if(tmp != NULL)
+            (tmp->node).preScale = drawObjInfo.preScale;
+
         DPRINT("[cnt=%d id=%d] ",cnt, tmp->node.id);
         //printf("drawobject cnt=%d id=%d lat=%f long=%f type=%d typeid=%d owner=%d\n",cnt, tmp->node.id, tmp->node.posLati,tmp->node.posLong,tmp->node.type, tmp->node.typeId, tmp->node.owner);
         cnt++;

@@ -51,6 +51,13 @@ if (is_null($pos_lat)) {
   //  throw new Exception("input error...");
 }
 
+$dbh = connectDb();
+
+//まずは、delete_fgが立っていて、一定時刻よりも古いものは、レコード自体削除する。
+$sql = "delete from objects where delete_fg = 1 and update_time <= (now() - interval 60 second)";
+$stmt = $dbh->prepare($sql);
+$stmt -> execute();
+
 //DBから値の取得
 
 $sql = "
@@ -73,7 +80,7 @@ WHERE id != $id
 
 //error_log("exec=$sql");
 //header('Content-type: application/json');
-$stmt = connectDb()->query($sql)->fetchAll(PDO::FETCH_ASSOC);
+$stmt = $dbh->query($sql)->fetchAll(PDO::FETCH_ASSOC);
 //$count = count($stmt);
 
 //  JSONでレスポンスを返す

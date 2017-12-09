@@ -98,10 +98,17 @@ int updateObjList(t_cell* bp, t_objInfo obj){
     //printf("getObjPtr\n");
     tmp = getObjPtr(bp, obj);
     //no object then add
-    if(tmp==NULL){
+    if(tmp==NULL&&obj.deleteFg!=1){
         //printf("updateObjList exec addOjb2List\n");
         return addObj2List(bp, obj);
     }
+
+    //if object is deleted. deleteObject From list
+    if(obj.deleteFg==1){
+        deleteObj2List(bp, obj);
+        return 0;
+    }
+
     //same object update
     //printf("updateObjList exec copyObjData\n");
 

@@ -587,7 +587,7 @@
         
         //id[1],lat[4],long[4],angle[2],type[1],owner[1],status[1],enableFg[1],viewFg[1]
                  
-        var sendBuf = new Int8Array(16);
+        var sendBuf = new Int8Array(18);
         sendBuf[0] = walkerObj.id;
         sendBuf[1] = arrayLati[0];
         sendBuf[2] = arrayLati[1];
@@ -605,6 +605,7 @@
         sendBuf[14] = walkerObj.statusFg;//status
         sendBuf[15] = walkerObj.enableFg;//enableFg
         sendBuf[16] = walkerObj.viewFg;//viewFg
+        sendBuf[17] = walkerObj.deleteFg;//viewFg
             
             gWriteMapObjQueue.push(sendBuf);  
         }
@@ -645,9 +646,14 @@
             //alert('getdata')
             var len = data.length;
             //log("search_obj.php len="+len);
+            //オブジェクトの取得に成功していたら、取得したデータでリストを再更新する。
+            if(len > 0){
+                gObjList.length=0;
+            }
+            
             for(var i = 0; i < len; i++) {
-                tmpObj = new WalkerObj(data[i].id, data[i].pos_lat, data[i].pos_long, data[i].pos_alt, data[i].pos_angle, data[i].type, data[i].type_id, data[i].owner, data[i].status_fg, data[i].enable_fg, data[i].delete_fg);
-               //log("updateObj i="+i+" objId="+data[i].id+" type="+data[i].type+" typeId="+data[i].type_id+" angle="+data[i].pos_angle);
+                tmpObj = new WalkerObj(data[i].id, data[i].pos_lat, data[i].pos_long, data[i].pos_alt, data[i].pos_angle, data[i].type, data[i].type_id, data[i].owner, data[i].status_fg, data[i].enable_fg, 1, data[i].delete_fg);
+               log("updateObj i="+i+" objId="+data[i].id+" type="+data[i].type+" typeId="+data[i].type_id+" angle="+data[i].pos_angle+" deleteFg="+data[i].delete_fg);
                //log("updateObj2 i="+i+" objId="+tmpObj.id+" type="+tmpObj.type+" typeId="+tmpObj.typeId+" angle="+tmpObj.angle);
                 
                 //check existance

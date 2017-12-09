@@ -198,7 +198,7 @@ static uint8_t get_obj_uuid[2] = {0x36, 0x2a};
 static uint8_t holding_objs_uuid[2] = {0x37, 0x2a};
 
 static const uint8_t cur_pos_val[11] ={0x00, 0x00, 0x00,0x00, 0x00,0x00, 0x00,0x00, 0x00, 0x00, 0x00};
-static const uint8_t map_obj_val[17] ={0x00, 0x00,0x00, 0x00,0x00, 0x00,0x00, 0x00,0x00,0x00,0x00, 0x00,0x00, 0x00,0x00, 0x00,0x00};
+static const uint8_t map_obj_val[18] ={0x00, 0x00,0x00, 0x00,0x00, 0x00,0x00, 0x00,0x00,0x00,0x00, 0x00,0x00, 0x00,0x00, 0x00,0x00,0x00};
 //static const uint8_t put_obj_val[10] ={0x00,0x00, 0x00,0x00, 0x00,0x00, 0x00,0x00,0x00,0x00};
 static const uint8_t put_obj_val[11] ={0x00,0x0,0x00, 0x00,0x00, 0x00,0x00, 0x00,0x00};
 static const uint8_t get_obj_val[1] ={0x00};
@@ -502,11 +502,12 @@ static void gatts_profile_event_handler(esp_gatts_cb_event_t event,
             tmpObj.status = *(p+14);
             tmpObj.enableFg = *(p+15);
             tmpObj.viewFg = *(p+16);
+            tmpObj.deleteFg =*(p+17);
 
             //printf("updated mapObj id=%d lati=%f long=%f angle=%d type=%d typeid=%d, owner=%d status=%d enableFg=%d viewFg=%d\n",
             //        (int)tmpObj.id, tmpObj.posLati, tmpObj.posLong, tmpObj.angle, (int)tmpObj.type, (int)tmpObj.typeId (int)tmpObj.owner, (int)tmpObj.status, (int)tmpObj.enableFg, (int)tmpObj.viewFg);
-            printf("updated mapObj id=%d lati=%f long=%f angle=%d type=%d typeid=%d, owner=%d status=%d enableFg=%d viewFg=%d\n",
-                               (int)tmpObj.id, tmpObj.posLati, tmpObj.posLong, tmpObj.angle, (int)tmpObj.type, (int)tmpObj.typeId, (int)tmpObj.owner, (int)tmpObj.status, (int)tmpObj.enableFg, (int)tmpObj.viewFg);
+            printf("updated mapObj id=%d lati=%f long=%f angle=%d type=%d typeid=%d, owner=%d status=%d enableFg=%d viewFg=%d deleteFg=%d\n",
+                               (int)tmpObj.id, tmpObj.posLati, tmpObj.posLong, tmpObj.angle, (int)tmpObj.type, (int)tmpObj.typeId, (int)tmpObj.owner, (int)tmpObj.status, (int)tmpObj.enableFg, (int)tmpObj.viewFg, (int)tmpObj.deleteFg);
 
             updateObjList(&gObjList, tmpObj);
 
@@ -1505,7 +1506,16 @@ void drawObject(t_objInfo *obj, t_objInfo *obj_o){
 
 void drawDisplay(){
     uint16_t x, y, th, n, i;
-    //TFT_fillWindow(TFT_BLACK);
+    static int preObjectNum =  -1;
+
+    //オブジェクトの数が少なくなっていたら、リフレッシュする。
+    int curObjLen = getObjListLen(&gObjList);
+    if(curObjLen<preObjectNum){
+        TFT_fillWindow(TFT_BLACK);
+    }
+    preObjectNum = curObjLen;
+
+
 
     //draw out line
     x = (dispWin.x2 - dispWin.x1) / 2;
@@ -1624,7 +1634,7 @@ void drawDisplay(){
         scale = pow(10, i);
         calcUIPos(scale, 0, 0, gScale, &posx1, &posy1);
         TFT_drawCircle((dispWin.x2-dispWin.x1)/2.0,(dispWin.y2-dispWin.y1)/2.0, posx1-(dispWin.x2-dispWin.x1)/2.0, gBaseColor1);
-        sprintf(buf,"%0.0fmm\n",scale);
+        sprintf(buf,"%0.0fm\n",scale);
         TFT_print(buf, (dispWin.x2-dispWin.x1)/2.0, (dispWin.y2-dispWin.y1)/2.0+(posx1-(dispWin.x2-dispWin.x1)/2.0));
 
         //TFT_drawCircle((dispWin.x2-dispWin.x1)/2.0, posx1, 10, gBaseColor1);

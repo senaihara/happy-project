@@ -16,6 +16,7 @@ typedef struct {
     char status;
     char enableFg;
     char viewFg;
+    char deleteFg;
     float prePosLati;
     float prePosLong;
     bool prePosEraseFg;   //true:prePosによる以前の情報クリアが有効

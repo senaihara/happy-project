@@ -2338,7 +2338,7 @@ void showObjs(){
     TFT_setFont(DEFAULT_FONT, NULL);
     t_cell *tmp=&gObjList;
     char buf[64];
-    sprintf(buf, "myi%dt%dtd%dla%.5flo%.5f",gMyObj.id, gMyObj.type,gMyObj.typeId, gMyObj.posLati, gMyObj.posLong);
+    sprintf(buf, "myid%d t%d la%.5f lo%.5f",gMyObj.id, gMyObj.type, gMyObj.posLati, gMyObj.posLong);
     TFT_print(buf, 0, 30);
 
     while (tmp->next != NULL) {
@@ -2691,6 +2691,38 @@ void app_main()
 
 //    updateObjList(&gObjList, tmpObj);
     updateObjList(&gHoldingObjList, tmpObj);
+
+    //デモ用にもう少し加える。
+    tmpObj.posLati = 36.5499/60;
+    tmpObj.posLong = 139.880458;
+    tmpObj.id=254;
+    tmpObj.type=OBJ_TYPE_STAMP;
+    tmpObj.typeId=2;
+    tmpObj.owner=gMyObj.id;
+    gSelectedStamp=tmpObj.typeId;
+    updateObjList(&gHoldingObjList, tmpObj);
+
+    tmpObj.posLati = 36.5499/60;
+    tmpObj.posLong = 139.880458;
+    tmpObj.id=253;
+    tmpObj.type=OBJ_TYPE_STAMP;
+    tmpObj.typeId=3;
+    tmpObj.owner=gMyObj.id;
+    gSelectedStamp=tmpObj.typeId;
+    updateObjList(&gHoldingObjList, tmpObj);
+
+    tmpObj.posLati = 36.5499/60;
+    tmpObj.posLong = 139.880458;
+    tmpObj.id=252;
+    tmpObj.type=OBJ_TYPE_STAMP;
+    tmpObj.typeId=4;
+    tmpObj.owner=gMyObj.id;
+    gSelectedStamp=tmpObj.typeId;
+    updateObjList(&gHoldingObjList, tmpObj);
+
+
+
+
 /*
     tmpObj.posLati = 36.549160;
     tmpObj.posLong = 139.880458;
